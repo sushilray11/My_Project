@@ -478,63 +478,7 @@ _s3.markdown("""<div data-testid="metric-container" style="background:white;bord
 <div style="color:#0f172a;font-size:0.85rem;font-weight:600;margin-top:4px;">On demand via yfinance</div>
 </div>""", unsafe_allow_html=True)
 
-# ── Section 1: NSE F&O Stocks Table ───────────────────────────────────────────
-st.markdown(f"""
-<div class="section-header">
-    <span class="section-header-title">📋 NSE F&amp;O Stocks</span>
-    <span class="section-badge">{len(_FNO)} stocks</span>
-</div>
-<div class="section-body">
-""", unsafe_allow_html=True)
-
-if st.button("📥 Load Today's Prices", key="load_fno_prices"):
-    with st.spinner("Fetching today's prices…"):
-        st.session_state["fno_prices"] = _fetch_fno_prices()
-
-fno_df = pd.DataFrame([{
-    "Stock":   nse_sym,
-    "Company": name,
-    "Chart":   f"https://www.tradingview.com/chart/?symbol=NSE:{nse_sym}",
-} for _, nse_sym, name in _FNO])
-
-_prices = st.session_state.get("fno_prices", {})
-if _prices:
-    fno_df["Price (₹)"] = fno_df["Stock"].map(lambda s: _prices.get(s, (None, None))[0])
-    fno_df["Day (%)"]   = fno_df["Stock"].map(lambda s: _prices.get(s, (None, None))[1])
-
-_fno_search = st.text_input(
-    "🔍 Search by symbol or company",
-    key="fno_search",
-    placeholder="e.g. RELIANCE, Infosys, HDFC…",
-)
-if _fno_search.strip():
-    _q = _fno_search.strip()
-    _mask = (
-        fno_df["Stock"].str.contains(_q, case=False, na=False)
-        | fno_df["Company"].str.contains(_q, case=False, na=False)
-    )
-    fno_df = fno_df[_mask].reset_index(drop=True)
-
-_col_cfg = {
-    "Stock":   st.column_config.TextColumn("Stock"),
-    "Company": st.column_config.TextColumn("Company"),
-    "Chart":   st.column_config.LinkColumn("TradingView", display_text="📈 Open Chart"),
-}
-if _prices:
-    _col_cfg["Price (₹)"] = st.column_config.NumberColumn("Price (₹)", format="₹%.2f")
-    _col_cfg["Day (%)"]   = st.column_config.NumberColumn("Day (%)",   format="%.2f%%")
-
-st.dataframe(
-    fno_df,
-    use_container_width=True,
-    height=min(600, 56 + len(fno_df) * 35),
-    column_config=_col_cfg,
-    hide_index=True,
-)
-st.caption(f"Showing {len(fno_df)} of {len(_FNO)} NSE F&O stocks")
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ── Section 2: Probable Upside — Next 1–2 Weeks ───────────────────────────────
+# ── Section 1: Probable Upside — Next 1–2 Weeks ──────────────────────────────
 st.markdown(f"""
 <div class="section-header">
     <span class="section-header-title">🔮 Probable Upside — Next 1–2 Weeks</span>
@@ -715,5 +659,61 @@ if st.session_state.get("swing_requested"):
     else:
         st.info("No stocks met the screening criteria. Try again during market hours.")
 
+st.markdown("</div>", unsafe_allow_html=True)  # close section-body
+
+# ── Section 2: NSE F&O Stocks Table ──────────────────────────────────────────
+st.markdown(f"""
+<div class="section-header">
+    <span class="section-header-title">📋 NSE F&amp;O Stocks</span>
+    <span class="section-badge">{len(_FNO)} stocks</span>
+</div>
+<div class="section-body">
+""", unsafe_allow_html=True)
+
+if st.button("📥 Load Today's Prices", key="load_fno_prices"):
+    with st.spinner("Fetching today's prices…"):
+        st.session_state["fno_prices"] = _fetch_fno_prices()
+
+fno_df = pd.DataFrame([{
+    "Stock":   nse_sym,
+    "Company": name,
+    "Chart":   f"https://www.tradingview.com/chart/?symbol=NSE:{nse_sym}",
+} for _, nse_sym, name in _FNO])
+
+_prices = st.session_state.get("fno_prices", {})
+if _prices:
+    fno_df["Price (₹)"] = fno_df["Stock"].map(lambda s: _prices.get(s, (None, None))[0])
+    fno_df["Day (%)"]   = fno_df["Stock"].map(lambda s: _prices.get(s, (None, None))[1])
+
+_fno_search = st.text_input(
+    "🔍 Search by symbol or company",
+    key="fno_search",
+    placeholder="e.g. RELIANCE, Infosys, HDFC…",
+)
+if _fno_search.strip():
+    _q = _fno_search.strip()
+    _mask = (
+        fno_df["Stock"].str.contains(_q, case=False, na=False)
+        | fno_df["Company"].str.contains(_q, case=False, na=False)
+    )
+    fno_df = fno_df[_mask].reset_index(drop=True)
+
+_col_cfg = {
+    "Stock":   st.column_config.TextColumn("Stock"),
+    "Company": st.column_config.TextColumn("Company"),
+    "Chart":   st.column_config.LinkColumn("TradingView", display_text="📈 Open Chart"),
+}
+if _prices:
+    _col_cfg["Price (₹)"] = st.column_config.NumberColumn("Price (₹)", format="₹%.2f")
+    _col_cfg["Day (%)"]   = st.column_config.NumberColumn("Day (%)",   format="%.2f%%")
+
+st.dataframe(
+    fno_df,
+    use_container_width=True,
+    height=min(600, 56 + len(fno_df) * 35),
+    column_config=_col_cfg,
+    hide_index=True,
+)
+st.caption(f"Showing {len(fno_df)} of {len(_FNO)} NSE F&O stocks")
 st.markdown("</div>", unsafe_allow_html=True)  # close section-body
 st.markdown("</div>", unsafe_allow_html=True)  # close content-wrap
