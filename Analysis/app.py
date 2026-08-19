@@ -39,8 +39,7 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* ── Base ── */
-html, body, [data-testid="stAppViewContainer"], .main,
-[class*="st-emotion-cache"] {
+html, body, [data-testid="stAppViewContainer"], .main {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
 .main { background: #f1f5f9 !important; }
