@@ -661,7 +661,438 @@ if st.session_state.get("swing_requested"):
 
 st.markdown("</div>", unsafe_allow_html=True)  # close section-body
 
-# ── Section 2: NSE F&O Stocks Table ──────────────────────────────────────────
+# ── Section 2: Support Entry Screener ─────────────────────────────────────────
+st.markdown("""
+<div class="section-header">
+    <span class="section-header-title">🎯 Support Entry Screener</span>
+    <span class="section-badge">Buy at support</span>
+</div>
+<div class="section-body">
+""", unsafe_allow_html=True)
+
+st.caption("Finds stocks that pulled back to a key support level and are showing early signs of reversal — potential low-risk buying opportunities")
+
+if st.button("🎯 Find Support Entry Setups", key="load_support"):
+    st.session_state.pop("support_data", None)
+    st.session_state["support_requested"] = True
+
+if st.session_state.get("support_requested"):
+    if "support_data" not in st.session_state:
+        import yfinance as yf
+
+        _syms3 = [nse for _, nse, _ in _FNO]
+        _tix3  = [f"{s}.NS" for s in _syms3]
+
+        with st.spinner("Downloading price history for support analysis…"):
+            _dh3  = yf.download(_tix3, period="1y", auto_adjust=True, progress=False)
+            _cl3  = _dh3["Close"]
+            _lo3  = _dh3["Low"]
+            _hi3  = _dh3["High"]
+            _vl3  = _dh3["Volume"]
+
+        _sup_rows = []
+        _prog3 = st.progress(0, text="Scanning support levels…")
+
+        for _i3, (_, _nse3, _) in enumerate(_FNO):
+            _prog3.progress((_i3 + 1) / len(_FNO), text=f"Scanning {_nse3}…")
+            try:
+                _tk3  = f"{_nse3}.NS"
+                _cs3  = _cl3[_tk3].dropna()
+                _c3   = list(_cs3.astype(float))
+                _l3   = list(_lo3[_tk3].dropna().astype(float))
+                _h3s  = list(_hi3[_tk3].dropna().astype(float))
+                _v3   = list(_vl3[_tk3].reindex(_cs3.index).fillna(0).astype(float))
+
+                if len(_c3) < 30:
+                    continue
+
+                _p3 = _c3[-1]
+
+                # Swing lows in last 60 bars
+                _slows3 = []
+                _st3 = max(3, len(_l3) - 60)
+                for _si in range(_st3, len(_l3) - 3):
+                    if (all(_l3[_si] <= _l3[_si - k] for k in range(1, 4) if _si - k >= 0)
+                            and all(_l3[_si] <= _l3[_si + k] for k in range(1, 4))):
+                        _slows3.append(_l3[_si])
+
+                # SMA support levels
+                _sm20_3  = sum(_c3[-20:]) / 20
+                _sm50_3  = sum(_c3[-min(50, len(_c3)):]) / min(50, len(_c3))
+                _sm200_3 = sum(_c3[-200:]) / 200 if len(_c3) >= 200 else None
+
+                # All candidates at or within 3% below current price
+                _sups3 = [s for s in _slows3 if s <= _p3 * 1.03]
+                for _sm3 in [_sm20_3, _sm50_3, _sm200_3]:
+                    if _sm3 and _sm3 <= _p3 * 1.03:
+                        _sups3.append(_sm3)
+
+                if not _sups3:
+                    continue
+
+                _near3 = max(_sups3)  # closest support below current price
+                _gap3  = (_p3 - _near3) / _near3 * 100
+
+                if not (0 <= _gap3 <= 3.0):
+                    continue
+
+                # Pullback from 20-day high
+                _hi20_3 = max(_h3s[-20:]) if len(_h3s) >= 20 else max(_h3s)
+                _pb3    = (_hi20_3 - _p3) / _hi20_3 * 100
+
+                if _pb3 < 4:   # need at least 4% pullback
+                    continue
+
+                # RSI
+                _g3  = [max(_c3[i] - _c3[i-1], 0) for i in range(1, len(_c3))]
+                _ls3 = [max(_c3[i-1] - _c3[i], 0) for i in range(1, len(_c3))]
+                _ag3 = sum(_g3[-14:])  / 14 if len(_g3)  >= 14 else 0
+                _al3 = sum(_ls3[-14:]) / 14 if len(_ls3) >= 14 else 1
+                _rsi3 = 100 - (100 / (1 + _ag3 / _al3))
+
+                # Bounce signals
+                _bounce3  = len(_c3) >= 3 and _c3[-1] > _c3[-2] and _c3[-2] > _c3[-3]
+                _dayup3   = _c3[-1] > _c3[-2]
+                _avgv3    = sum(_v3[-20:]) / 20 if len(_v3) >= 20 else 0
+                _bvol3    = bool(_avgv3 and _v3[-1] > _avgv3 * 1.1)
+
+                # Support type label
+                if _sm200_3 and abs(_near3 - _sm200_3) / _sm200_3 < 0.012:
+                    _stype3 = "SMA 200"
+                elif abs(_near3 - _sm50_3) / _sm50_3 < 0.012:
+                    _stype3 = "SMA 50"
+                elif abs(_near3 - _sm20_3) / _sm20_3 < 0.012:
+                    _stype3 = "SMA 20"
+                else:
+                    _stype3 = "Swing Low"
+
+                # Prior uptrend: SMA50 now >= SMA50 from 20 days ago
+                _sma50_20ago_s  = sum(_c3[-70:-20]) / 50 if len(_c3) >= 70 else None
+                _prior_uptrend_s = bool(_sma50_20ago_s and _sm50_3 >= _sma50_20ago_s)
+
+                # Support strength: count times daily lows came within 2% of this level
+                _sup_touches = sum(1 for _li in _l3[-120:] if abs(_li - _near3) / _near3 <= 0.02)
+
+                # Score /8
+                _sc3 = sum([
+                    _gap3 <= 1.5,
+                    _bounce3,
+                    _dayup3 and _bvol3,
+                    25 <= _rsi3 <= 58,
+                    4 <= _pb3 <= 20,
+                    _pb3 >= 7,
+                    _prior_uptrend_s,    # was in uptrend before this pullback
+                    _sup_touches >= 2,   # support tested multiple times = stronger level
+                ])
+
+                if _sc3 >= 4:
+                    _buy_lo3 = round(_near3 * 0.99, 2)
+                    _buy_hi3 = round(_near3 * 1.02, 2)
+                    _stop3   = round(_near3 * 0.97, 2)
+                    _tgt3    = round(_hi20_3, 2)
+                    _rwd3    = round((_tgt3 - _p3) / _p3 * 100, 1)
+                    _rsk3    = round((_p3 - _stop3) / _p3 * 100, 1)
+                    _rr3     = round(_rwd3 / _rsk3, 1) if _rsk3 > 0 else 0.0
+
+                    _sup_rows.append({
+                        "Stock":        _nse3,
+                        "Sector":       _SECTOR.get(_nse3, "Other"),
+                        "Price (₹)":    round(_p3, 2),
+                        "Support (₹)":  round(_near3, 2),
+                        "Support Type": _stype3,
+                        "Sup. Touches": _sup_touches,
+                        "Gap %":        round(_gap3, 2),
+                        "Pullback %":   round(_pb3, 1),
+                        "RSI":          round(_rsi3, 1),
+                        "Prior Trend":  "✅" if _prior_uptrend_s else "❌",
+                        "Bounce":       "✅" if _bounce3 else ("↑" if _dayup3 else "❌"),
+                        "Vol Surge":    "✅" if _bvol3 else "❌",
+                        "Buy Zone":     f"₹{_buy_lo3}–{_buy_hi3}",
+                        "Target (₹)":  _tgt3,
+                        "Stop (₹)":    _stop3,
+                        "Risk %":      _rsk3,
+                        "R:R":         _rr3,
+                        "Score /8":     _sc3,
+                        "Chart":        f"https://www.tradingview.com/chart/?symbol=NSE:{_nse3}",
+                    })
+            except Exception:
+                pass
+
+        _prog3.empty()
+        st.session_state["support_data"] = _sup_rows
+
+    _sup_data = st.session_state.get("support_data", [])
+    if _sup_data:
+        _sup_df = (
+            pd.DataFrame(_sup_data)
+            .sort_values(["Score /8", "R:R", "Gap %"], ascending=[False, False, True])
+            .head(25)
+            .reset_index(drop=True)
+        )
+        _sup_df.index += 1
+
+        _strong3 = (_sup_df["Score /8"] >= 7).sum()
+        st.markdown(
+            f"**{len(_sup_df)} stocks** found at key support levels  •  "
+            f"**{_strong3} high-conviction setups** (Score ≥ 7/8)"
+        )
+
+        st.dataframe(
+            _sup_df,
+            use_container_width=True,
+            height=min(600, 56 + len(_sup_df) * 35),
+            column_config={
+                "Stock":        st.column_config.TextColumn("Stock"),
+                "Sector":       st.column_config.TextColumn("Sector"),
+                "Price (₹)":   st.column_config.NumberColumn("Price (₹)",    format="₹%.2f"),
+                "Support (₹)": st.column_config.NumberColumn("Support (₹)",  format="₹%.2f"),
+                "Support Type":st.column_config.TextColumn("Support Type"),
+                "Sup. Touches":st.column_config.NumberColumn("Sup. Touches", format="%d×"),
+                "Gap %":       st.column_config.NumberColumn("Gap %",         format="%.2f%%"),
+                "Pullback %":  st.column_config.NumberColumn("Pullback %",    format="%.1f%%"),
+                "RSI":         st.column_config.NumberColumn("RSI",           format="%.1f"),
+                "Prior Trend": st.column_config.TextColumn("Prior Trend"),
+                "Bounce":      st.column_config.TextColumn("Bounce"),
+                "Vol Surge":   st.column_config.TextColumn("Vol Surge"),
+                "Buy Zone":    st.column_config.TextColumn("Buy Zone"),
+                "Target (₹)": st.column_config.NumberColumn("Target (₹)",    format="₹%.2f"),
+                "Stop (₹)":   st.column_config.NumberColumn("Stop (₹)",      format="₹%.2f"),
+                "Risk %":     st.column_config.NumberColumn("Risk %",         format="%.1f%%"),
+                "R:R":        st.column_config.NumberColumn("Reward:Risk",    format="1:%.1f"),
+                "Score /8":    st.column_config.NumberColumn("Score /8",      format="%d"),
+                "Chart":       st.column_config.LinkColumn("TradingView",     display_text="📈 Open Chart"),
+            },
+        )
+
+        with st.expander("ℹ️ How the Support Entry Screener works"):
+            st.markdown("""
+| Signal | What it detects |
+|---|---|
+| **Gap %** | Distance from current price to the nearest support (filter: must be ≤ 3%) — lower = price already at support |
+| **Bounce** | 2 consecutive up-close days — early reversal signal after touching support |
+| **Vol Surge** | Today's volume > 110% of 20-day average at or near support — institutional buying |
+| **RSI 25–58** | RSI in oversold-to-neutral zone — stock is cooling off, not in freefall |
+| **Pullback 4–20%** | Pulled back enough to be meaningful but not a breakdown |
+| **Pullback ≥ 7%** | Deeper pullback creates better risk-reward at support |
+| **Prior Trend** | SMA50 now ≥ SMA50 from 20 days ago — ensures this is a retracement in an uptrend, not a breakdown |
+| **Sup. Touches ≥ 2** | Support has been tested and held at least twice in the past 120 days — level is proven |
+
+**Support Type** shows the source: SMA 200 (strongest) → SMA 50 → SMA 20 → Swing Low.
+**Score /8** — how many signals are true. Min 4 required to appear.
+**Sorted by:** Score (desc) → Reward:Risk (desc) → Gap % (asc) — best quality and value setups first.
+**Buy Zone** — entry range around support (−1% to +2% of support level).
+**Risk %** — stop is 3% below support; Risk % = distance from current price to stop.
+**Reward:Risk** — potential gain to 20-day high ÷ risk to stop (higher = better).
+⚠️ For informational purposes only — not financial advice.
+""")
+    else:
+        st.info("No stocks found at key support levels right now. Try during or after a broader market pullback.")
+
+st.markdown("</div>", unsafe_allow_html=True)  # close section-body
+
+# ── Section 3: Consolidation Breakout Screener ───────────────────────────────
+st.markdown("""
+<div class="section-header">
+    <span class="section-header-title">🔲 Consolidation Breakout Screener</span>
+    <span class="section-badge">Coiling to break out</span>
+</div>
+<div class="section-body">
+""", unsafe_allow_html=True)
+
+st.caption("Finds stocks coiling in a tight range with shrinking volume and Bollinger squeeze — typically precede a strong upward breakout")
+
+if st.button("🔲 Find Consolidation Setups", key="load_consol"):
+    st.session_state.pop("consol_data", None)
+    st.session_state["consol_requested"] = True
+
+if st.session_state.get("consol_requested"):
+    if "consol_data" not in st.session_state:
+        import yfinance as yf
+
+        _syms4 = [nse for _, nse, _ in _FNO]
+        _tix4  = [f"{s}.NS" for s in _syms4]
+
+        with st.spinner("Downloading price history for consolidation analysis…"):
+            _dh4  = yf.download(_tix4, period="1y", auto_adjust=True, progress=False)
+            _cl4  = _dh4["Close"]
+            _hi4  = _dh4["High"]
+            _vl4  = _dh4["Volume"]
+
+        _con_rows = []
+        _prog4 = st.progress(0, text="Scanning consolidation patterns…")
+
+        for _i4, (_, _nse4, _) in enumerate(_FNO):
+            _prog4.progress((_i4 + 1) / len(_FNO), text=f"Scanning {_nse4}…")
+            try:
+                _tk4  = f"{_nse4}.NS"
+                _cs4  = _cl4[_tk4].dropna()
+                _c4   = list(_cs4.astype(float))
+                _h4   = list(_hi4[_tk4].dropna().astype(float))
+                _v4   = list(_vl4[_tk4].reindex(_cs4.index).fillna(0).astype(float))
+
+                if len(_c4) < 35:
+                    continue
+
+                _p4 = _c4[-1]
+
+                # ── Range metrics ──────────────────────────────────────────
+                _range10 = (max(_c4[-10:]) - min(_c4[-10:])) / _p4 * 100
+                _range30 = (max(_c4[-30:]) - min(_c4[-30:])) / _p4 * 100
+
+                # Hard filter: range must be tight (< 5%) and stock above SMA50
+                _sma50_4_pre = sum(_c4[-min(50, len(_c4)):]) / min(50, len(_c4))
+                if _range10 > 5 or _c4[-1] <= _sma50_4_pre:
+                    continue
+                # Range must be shrinking to less than half of 30D range
+                _range_contract = _range10 < _range30 * 0.50
+
+                # ── Days in consolidation: expand lookback until range exceeds 6% ──
+                _days_consol = 10
+                for _ext in range(11, min(60, len(_c4))):
+                    _r_ext = (max(_c4[-_ext:]) - min(_c4[-_ext:])) / _p4 * 100
+                    if _r_ext > 6:
+                        break
+                    _days_consol = _ext
+
+                # ── Bollinger Band squeeze ─────────────────────────────────
+                _sma20_4 = sum(_c4[-20:]) / 20
+                _std20   = (sum((x - _sma20_4) ** 2 for x in _c4[-20:]) / 20) ** 0.5
+                _bb_w    = 4 * _std20 / _sma20_4 * 100  # BB width %
+
+                # Compare to BB width 15 days ago
+                _sma20_p = sum(_c4[-35:-15]) / 20
+                _std20_p = (sum((x - _sma20_p) ** 2 for x in _c4[-35:-15]) / 20) ** 0.5
+                _bb_w_p  = 4 * _std20_p / _sma20_p * 100
+                _bb_squeeze = _bb_w < _bb_w_p * 0.8  # current BB width < 80% of prior
+
+                # ── Position in range ──────────────────────────────────────
+                _high20_4 = max(_h4[-20:]) if len(_h4) >= 20 else max(_h4)
+                _near_hi4 = _p4 >= _high20_4 * 0.95  # near top of range
+
+                # ── Volume dry-up ──────────────────────────────────────────
+                _avgv5_4  = sum(_v4[-5:])  / 5  if len(_v4) >= 5  else 0
+                _avgv20_4 = sum(_v4[-20:]) / 20 if len(_v4) >= 20 else 0
+                _vol_dry  = bool(_avgv20_4 and _avgv5_4 < _avgv20_4 * 0.85)
+                _vol_ratio = round(_avgv5_4 / _avgv20_4, 2) if _avgv20_4 else 1.0
+
+                # ── SMA20 flat ─────────────────────────────────────────────
+                _sma20_5d = sum(_c4[-25:-5]) / 20 if len(_c4) >= 25 else _sma20_4
+                _sma_flat = abs(_sma20_4 - _sma20_5d) / _sma20_4 < 0.012
+
+                # ── Trend: price above SMA20 and SMA50 ────────────────────
+                _sma50_4     = sum(_c4[-min(50, len(_c4)):]) / min(50, len(_c4))
+                _above_sma20 = _p4 > _sma20_4
+                _above_sma50 = _p4 > _sma50_4
+
+                # ── Prior uptrend: SMA50 was rising 20 days before consolidation ──
+                _sma50_20ago   = sum(_c4[-70:-20]) / 50 if len(_c4) >= 70 else None
+                _prior_uptrend = bool(_sma50_20ago and _sma50_4 >= _sma50_20ago)
+
+                # ── Breakout level = 0.5% above 10-day high ───────────────
+                _brk4       = round(max(_h4[-10:]) * 1.005, 2)
+                _pct_to_brk = round((_brk4 - _p4) / _p4 * 100, 2)
+
+                # ── Score /8 ───────────────────────────────────────────────
+                _sc4 = sum([
+                    _range10 < 3.5,                 # very tight range (extra credit)
+                    _range_contract,                 # range shrinking to < 50% of 30D range
+                    _bb_squeeze,                     # Bollinger bands squeezing
+                    _near_hi4,                       # consolidating near top of range
+                    _vol_dry,                        # volume declining = accumulation
+                    _sma_flat,                       # SMA20 flat = sideways action
+                    _above_sma20,                    # price above SMA20 (SMA50 already a hard filter)
+                    _prior_uptrend,                  # was in uptrend before consolidating
+                ])
+
+                if _sc4 >= 5:
+                    _con_rows.append({
+                        "Stock":        _nse4,
+                        "Sector":       _SECTOR.get(_nse4, "Other"),
+                        "Price (₹)":    round(_p4, 2),
+                        "Breakout ₹":   _brk4,
+                        "To Breakout%": _pct_to_brk,
+                        "Days Consol.": _days_consol,
+                        "10D Range %":  round(_range10, 2),
+                        "BB Width %":   round(_bb_w, 2),
+                        "Vol Ratio":    _vol_ratio,
+                        "SMA Flat":     "✅" if _sma_flat       else "❌",
+                        "Near High":    "✅" if _near_hi4       else "❌",
+                        "BB Squeeze":   "✅" if _bb_squeeze     else "❌",
+                        "Prior Trend":  "✅" if _prior_uptrend  else "❌",
+                        "Score /8":     _sc4,
+                        "Chart":        f"https://www.tradingview.com/chart/?symbol=NSE:{_nse4}",
+                    })
+            except Exception:
+                pass
+
+        _prog4.empty()
+        st.session_state["consol_data"] = _con_rows
+
+    _con_data = st.session_state.get("consol_data", [])
+    if _con_data:
+        _con_df = (
+            pd.DataFrame(_con_data)
+            .sort_values(["Score /8", "Days Consol.", "10D Range %"],
+                         ascending=[False, False, True])
+            .head(25)
+            .reset_index(drop=True)
+        )
+        _con_df.index += 1
+
+        _strong4 = (_con_df["Score /8"] >= 7).sum()
+        st.markdown(
+            f"**{len(_con_df)} stocks** in tight consolidation — watch for breakout above the Breakout ₹ level  •  "
+            f"**{_strong4} high-conviction setups** (Score ≥ 7/8)"
+        )
+
+        st.dataframe(
+            _con_df,
+            use_container_width=True,
+            height=min(600, 56 + len(_con_df) * 35),
+            column_config={
+                "Stock":        st.column_config.TextColumn("Stock"),
+                "Sector":       st.column_config.TextColumn("Sector"),
+                "Price (₹)":   st.column_config.NumberColumn("Price (₹)",      format="₹%.2f"),
+                "Breakout ₹":  st.column_config.NumberColumn("Breakout ₹",     format="₹%.2f"),
+                "To Breakout%":st.column_config.NumberColumn("To Breakout %",  format="%.2f%%"),
+                "Days Consol.":st.column_config.NumberColumn("Days Consol.",   format="%d days"),
+                "10D Range %": st.column_config.NumberColumn("10D Range %",    format="%.2f%%"),
+                "BB Width %":  st.column_config.NumberColumn("BB Width %",     format="%.2f%%"),
+                "Vol Ratio":   st.column_config.NumberColumn("Vol Ratio",      format="%.2fx"),
+                "SMA Flat":    st.column_config.TextColumn("SMA Flat"),
+                "Near High":   st.column_config.TextColumn("Near High"),
+                "BB Squeeze":  st.column_config.TextColumn("BB Squeeze"),
+                "Prior Trend": st.column_config.TextColumn("Prior Trend"),
+                "Score /8":    st.column_config.NumberColumn("Score /8",       format="%d"),
+                "Chart":       st.column_config.LinkColumn("TradingView",      display_text="📈 Open Chart"),
+            },
+        )
+
+        with st.expander("ℹ️ How the Consolidation Breakout Screener works"):
+            st.markdown("""
+| Signal | What it detects |
+|---|---|
+| **10D Range %** | Price range of last 10 days as % of price — lower = tighter coil (filter: must be < 7%) |
+| **Range Contraction** | 10-day range < 65% of 30-day range — the range is actively shrinking |
+| **BB Squeeze** | Current Bollinger Band width < 80% of its level 15 days ago — volatility compressing |
+| **Near High** | Price ≥ 95% of the 20-day high — consolidating at the top, not the bottom |
+| **Vol Ratio** | 5-day avg volume ÷ 20-day avg volume — below 1.0x = volume drying up (accumulation) |
+| **SMA Flat** | SMA20 moved < 1.2% in last 20 days — confirms sideways / base-building action |
+| **Trend Intact** | Price above both SMA20 and SMA50 — underlying trend is still up |
+| **Prior Uptrend** | SMA50 now ≥ SMA50 from 20 days ago — stock was rising before it started consolidating |
+
+**Score /8** — how many of the 8 signals are true. Min 5 required to appear.
+**Sorted by:** Score (desc) → Days Consolidating (desc) → Range % (asc) — longest, tightest coils first.
+**Entry signal:** Watch for a close above **Breakout ₹** on above-average volume.
+**To Breakout %** — how far price needs to move to trigger; lower = closer to the edge.
+⚠️ For informational purposes only — not financial advice.
+""")
+    else:
+        st.info("No consolidation setups found right now. They appear after a period of trending followed by sideways action.")
+
+st.markdown("</div>", unsafe_allow_html=True)  # close section-body
+
+# ── Section 4: NSE F&O Stocks Table ──────────────────────────────────────────
 st.markdown(f"""
 <div class="section-header">
     <span class="section-header-title">📋 NSE F&amp;O Stocks</span>
