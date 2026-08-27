@@ -306,35 +306,86 @@ _FNO_EXCLUDE = {
     "NIFTYFPI","TMPV",
 }
 
+import json as _json, os as _os, datetime as _dt
+_CACHE_FILE = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "fno_cache.json")
+
+def _load_fno_cache():
+    try:
+        with open(_CACHE_FILE) as f:
+            c = _json.load(f)
+        syms  = c.get("symbols", [])
+        names = c.get("names", {})
+        age   = (_dt.date.today() - _dt.date.fromisoformat(c.get("updated", "2000-01-01"))).days
+        if len(syms) >= 50:
+            return syms, names, age
+    except Exception:
+        pass
+    return None, {}, None
+
+def _save_fno_cache(symbols, names):
+    try:
+        with open(_CACHE_FILE, "w") as f:
+            _json.dump({"updated": str(_dt.date.today()), "symbols": symbols, "names": names}, f)
+    except Exception:
+        pass
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_fno_symbols():
     """
-    Fetch live NSE F&O equity list from Zerodha's instruments file.
-    Updated daily, no auth required. Returns sorted list or None on failure.
-    Cached for 24 hours.
+    Fetch live F&O symbol list (Zerodha) + company names (NSE equity master) weekly.
+    Saves both to fno_cache.json. Falls back to cache, then hardcoded list.
     """
-    try:
-        import requests, io
-        r = requests.get("https://api.kite.trade/instruments", timeout=20)
-        r.raise_for_status()
-        df = pd.read_csv(io.StringIO(r.text))
-        fno = df[(df["exchange"] == "NFO") & (df["instrument_type"] == "FUT")]
-        syms = sorted({
-            str(s).strip() for s in fno["name"].dropna().unique()
-            if str(s).strip() not in _FNO_EXCLUDE
-        })
-        if len(syms) >= 50:
-            return syms
-    except Exception:
-        pass
-    return None
+    cached_syms, cached_names, cache_age = _load_fno_cache()
 
-_fno_live   = _fetch_fno_symbols()
-_fno_source = "Zerodha Live" if _fno_live else "Bundled"
+    if cached_syms is None or cache_age >= 7:
+        try:
+            import requests, io
+            # Step 1: F&O symbols from Zerodha
+            r = requests.get("https://api.kite.trade/instruments", timeout=20)
+            r.raise_for_status()
+            df = pd.read_csv(io.StringIO(r.text))
+            fno = df[(df["exchange"] == "NFO") & (df["instrument_type"] == "FUT")]
+            syms = sorted({
+                str(s).strip() for s in fno["name"].dropna().unique()
+                if str(s).strip() not in _FNO_EXCLUDE
+            })
+            if len(syms) >= 50:
+                # Step 2: Company names from NSE equity master (for new stocks not in hardcoded dict)
+                names = dict(cached_names)
+                try:
+                    r2 = requests.get(
+                        "https://archives.nseindia.com/content/equities/EQUITY_L.csv",
+                        timeout=20,
+                    )
+                    r2.raise_for_status()
+                    eq = pd.read_csv(io.StringIO(r2.text))
+                    sym_col  = eq.columns[0]
+                    name_col = next((c for c in eq.columns if "NAME" in c.upper()), None)
+                    if name_col:
+                        for _, row in eq.iterrows():
+                            s = str(row[sym_col]).strip()
+                            n = str(row[name_col]).strip()
+                            if s in syms and n and n.lower() != "nan":
+                                names[s] = n.title()
+                except Exception:
+                    pass
+                _save_fno_cache(syms, names)
+                return syms, names, "Zerodha Live"
+        except Exception:
+            pass
+        if cached_syms:
+            return cached_syms, cached_names, f"Cache ({cache_age}d old)"
+        return None, {}, "Bundled"
+
+    return cached_syms, cached_names, "Zerodha Live"
+
+_fno_live, _fno_cached_names, _fno_source = _fetch_fno_symbols()
+# Hardcoded names take priority (cleaner); cached NSE names fill in new/unknown stocks
+_COMPANY_NAMES_MERGED = {**_fno_cached_names, **_COMPANY_NAMES}
 _FNO = (
-    [(s, s, _COMPANY_NAMES.get(s, s)) for s in _fno_live]
+    [(s, s, _COMPANY_NAMES_MERGED.get(s, s)) for s in _fno_live]
     if _fno_live
-    else [(s, s, name) for s, name in sorted(_COMPANY_NAMES.items())]
+    else [(s, s, _COMPANY_NAMES.get(s, s)) for s in sorted(_COMPANY_NAMES)]
 )
 
 _SECTOR = {

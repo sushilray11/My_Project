@@ -8,7 +8,7 @@ Schedule via cron (3 PM IST, weekdays):
     0 15 * * 1-5 cd /Users/I325211/Local_Project/Analysis && python3 daily_export.py >> exports/export_log.txt 2>&1
 """
 
-import os, io, re, datetime
+import os, io, re, datetime, json
 import pandas as pd
 import yfinance as yf
 import requests
@@ -18,9 +18,10 @@ SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 EXPORTS_DIR = os.path.join(SCRIPT_DIR, "exports")
 os.makedirs(EXPORTS_DIR, exist_ok=True)
 
-TODAY   = datetime.date.today().strftime("%Y-%m-%d")
-NOW     = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-OUTFILE = os.path.join(EXPORTS_DIR, f"screener_{TODAY}.xlsx")
+TODAY     = datetime.date.today().strftime("%Y-%m-%d")
+NOW       = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+OUTFILE   = os.path.join(EXPORTS_DIR, f"screener_{TODAY}.xlsx")
+HIST_FILE = os.path.join(EXPORTS_DIR, "consolidated_history.xlsx")
 
 def log(msg):
     print(f"[{datetime.datetime.now():%H:%M:%S}] {msg}", flush=True)
@@ -101,22 +102,69 @@ FNO_EXCLUDE = {
     "NIFTYFPI","TMPV",
 }
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-def fetch_fno_symbols():
+CACHE_FILE = os.path.join(SCRIPT_DIR, "fno_cache.json")
+
+def _load_fno_cache():
     try:
-        r = requests.get("https://api.kite.trade/instruments", timeout=20)
-        r.raise_for_status()
-        df = pd.read_csv(io.StringIO(r.text))
-        fno = df[(df["exchange"] == "NFO") & (df["instrument_type"] == "FUT")]
-        syms = sorted({
-            str(s).strip() for s in fno["name"].dropna().unique()
-            if str(s).strip() not in FNO_EXCLUDE
-        })
+        with open(CACHE_FILE) as f:
+            c = json.load(f)
+        syms  = c.get("symbols", [])
+        names = c.get("names", {})
+        age   = (datetime.date.today() - datetime.date.fromisoformat(c.get("updated", "2000-01-01"))).days
         if len(syms) >= 50:
-            return syms
+            return syms, names, age
     except Exception:
         pass
-    return None
+    return None, {}, None
+
+def _save_fno_cache(symbols, names):
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump({"updated": str(datetime.date.today()), "symbols": symbols, "names": names}, f)
+    except Exception:
+        pass
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def fetch_fno_symbols():
+    cached_syms, cached_names, cache_age = _load_fno_cache()
+    if cached_syms is None or cache_age >= 7:
+        try:
+            r = requests.get("https://api.kite.trade/instruments", timeout=20)
+            r.raise_for_status()
+            df = pd.read_csv(io.StringIO(r.text))
+            fno = df[(df["exchange"] == "NFO") & (df["instrument_type"] == "FUT")]
+            syms = sorted({
+                str(s).strip() for s in fno["name"].dropna().unique()
+                if str(s).strip() not in FNO_EXCLUDE
+            })
+            if len(syms) >= 50:
+                # Also fetch company names from NSE equity master
+                names = dict(cached_names)
+                try:
+                    r2 = requests.get(
+                        "https://archives.nseindia.com/content/equities/EQUITY_L.csv",
+                        timeout=20,
+                    )
+                    r2.raise_for_status()
+                    eq = pd.read_csv(io.StringIO(r2.text))
+                    sym_col  = eq.columns[0]
+                    name_col = next((c for c in eq.columns if "NAME" in c.upper()), None)
+                    if name_col:
+                        for _, row in eq.iterrows():
+                            s = str(row[sym_col]).strip()
+                            n = str(row[name_col]).strip()
+                            if s in syms and n and n.lower() != "nan":
+                                names[s] = n.title()
+                except Exception:
+                    pass
+                _save_fno_cache(syms, names)
+                return syms, names, "Zerodha Live"
+        except Exception:
+            pass
+        if cached_syms:
+            return cached_syms, cached_names, f"Cache ({cache_age}d old)"
+        return None, {}, "Bundled"
+    return cached_syms, cached_names, "Cache (fresh)"
 
 SECTOR = {
     "ABCAPITAL":"Financial Services","AXISBANK":"Financial Services","BAJAJFINSV":"Financial Services",
@@ -512,14 +560,170 @@ def write_excel(sheets_data):
 
     wb.save(OUTFILE)
 
+# ── Consolidated 20-day history ───────────────────────────────────────────────
+def update_consolidated_history(results: dict):
+    """
+    Appends today's screener results to consolidated_history.xlsx.
+    Layout per sheet: Stock | Company | date1 | date2 | … (newest right)
+    Keeps only the last 20 days of date columns.
+    """
+    from openpyxl import Workbook, load_workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    today_str = str(datetime.date.today())
+    cutoff    = datetime.date.today() - datetime.timedelta(days=365)
+
+    SCORE_COL = {
+        "Probable Upside":        "Score /11",
+        "Support Entry":          "Score /8",
+        "Consolidation Breakout": "Score /8",
+    }
+    MAX_SCORE = {
+        "Probable Upside": 11,
+        "Support Entry":   8,
+        "Consolidation Breakout": 8,
+    }
+
+    # ── Load existing history ──────────────────────────────────────────────────
+    # history[sheet] = {stock: {"company": str, "scores": {date_str: "n/m"}}}
+    history = {name: {} for name in results}
+
+    if os.path.exists(HIST_FILE):
+        try:
+            wb_old = load_workbook(HIST_FILE)
+            for sheet_name in results:
+                if sheet_name not in wb_old.sheetnames:
+                    continue
+                ws = wb_old[sheet_name]
+                headers = [cell.value for cell in ws[1]]
+                date_cols = {}          # col_index (0-based) -> date_str
+                for ci, h in enumerate(headers):
+                    if h and h != "Stock":
+                        try:
+                            d = datetime.date.fromisoformat(str(h)[:10])
+                            if d >= cutoff:
+                                date_cols[ci] = str(d)
+                        except Exception:
+                            pass
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    stock = str(row[0]).strip() if row[0] else None
+                    if not stock or stock == "None":
+                        continue
+                    entry = history[sheet_name].setdefault(
+                        stock, {"scores": {}}
+                    )
+                    for ci, date_str in date_cols.items():
+                        if ci < len(row) and row[ci]:
+                            entry["scores"][date_str] = str(row[ci])
+        except Exception:
+            pass   # corrupt file — rebuild from scratch
+
+    # ── Merge today's results ──────────────────────────────────────────────────
+    for sheet_name, df in results.items():
+        if df is None or df.empty:
+            continue
+        scol  = SCORE_COL.get(sheet_name, "Score /8")
+        mscore = MAX_SCORE.get(sheet_name, 8)
+        for _, row in df.iterrows():
+            stock   = str(row.get("Stock", "")).strip()
+            score   = row.get(scol, "")
+            if not stock:
+                continue
+            entry = history[sheet_name].setdefault(stock, {"scores": {}})
+            try:
+                entry["scores"][today_str] = f"{int(score)}/{mscore}"
+            except Exception:
+                entry["scores"][today_str] = str(score)
+
+    # ── Build workbook ─────────────────────────────────────────────────────────
+    HDR_FILL   = PatternFill("solid", fgColor="1F497D")
+    HDR_FONT   = Font(bold=True, color="FFFFFF", size=10)
+    DATE_FILL  = PatternFill("solid", fgColor="2E75B6")
+    DATE_FONT  = Font(bold=True, color="FFFFFF", size=10)
+    GREEN_FILL = PatternFill("solid", fgColor="C6EFCE")
+    YLLOW_FILL = PatternFill("solid", fgColor="FFEB9C")
+    ALT_FILL   = PatternFill("solid", fgColor="EEF3FB")
+    CENTER     = Alignment(horizontal="center", vertical="center")
+    THIN       = Border(
+        left   = Side(style="thin", color="D0D0D0"),
+        right  = Side(style="thin", color="D0D0D0"),
+        top    = Side(style="thin", color="D0D0D0"),
+        bottom = Side(style="thin", color="D0D0D0"),
+    )
+    TAB_COLORS = {
+        "Probable Upside":        "4472C4",
+        "Support Entry":          "70AD47",
+        "Consolidation Breakout": "ED7D31",
+    }
+
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    for sheet_name, stock_data in history.items():
+        if not stock_data:
+            continue
+
+        all_dates = sorted(
+            {d for e in stock_data.values() for d in e["scores"]
+             if datetime.date.fromisoformat(d) >= cutoff}
+        )
+
+        ws = wb.create_sheet(sheet_name)
+        ws.sheet_properties.tabColor = TAB_COLORS.get(sheet_name, "4472C4")
+        ws.freeze_panes = "B2"
+
+        # Header row
+        for ci, h in enumerate(["Stock"] + all_dates, 1):
+            cell = ws.cell(row=1, column=ci, value=h)
+            cell.font      = DATE_FONT if ci > 1 else HDR_FONT
+            cell.fill      = DATE_FILL if ci > 1 else HDR_FILL
+            cell.alignment = CENTER
+            cell.border    = THIN
+        ws.row_dimensions[1].height = 22
+
+        # Sort: today's score desc, then alphabetical
+        def _sort_key(item):
+            scr = item[1]["scores"].get(today_str, "")
+            try:
+                return (-int(scr.split("/")[0]), item[0])
+            except Exception:
+                return (0, item[0])
+
+        for ri, (stock, entry) in enumerate(sorted(stock_data.items(), key=_sort_key), 2):
+            alt_fill = ALT_FILL if ri % 2 == 0 else None
+
+            c = ws.cell(row=ri, column=1, value=stock)
+            c.font = Font(bold=True, size=10); c.border = THIN; c.alignment = Alignment(vertical="center")
+            if alt_fill: c.fill = alt_fill
+
+            for ci, date_str in enumerate(all_dates, 2):
+                val = entry["scores"].get(date_str, "")
+                c = ws.cell(row=ri, column=ci, value=val)
+                c.alignment = CENTER; c.border = THIN; c.font = Font(size=10)
+                if val:
+                    try:
+                        ratio = int(val.split("/")[0]) / int(val.split("/")[1])
+                        c.fill = GREEN_FILL if ratio >= 0.75 else YLLOW_FILL
+                    except Exception:
+                        c.fill = YLLOW_FILL
+                elif alt_fill:
+                    c.fill = alt_fill
+
+        ws.column_dimensions["A"].width = 18
+        for ci in range(2, len(all_dates) + 2):
+            ws.column_dimensions[get_column_letter(ci)].width = 13
+
+    wb.save(HIST_FILE)
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     log("NSE F&O Daily Export starting…")
 
-    fno_live   = fetch_fno_symbols()
-    fno_source = "NSE Live" if fno_live else "Bundled"
+    fno_live, fno_cached_names, fno_source = fetch_fno_symbols()
+    COMPANY_NAMES_MERGED = {**fno_cached_names, **COMPANY_NAMES}
     FNO = (
-        [(s, s, COMPANY_NAMES.get(s, s)) for s in fno_live]
+        [(s, s, COMPANY_NAMES_MERGED.get(s, s)) for s in fno_live]
         if fno_live
         else [(s, s, n) for s, n in sorted(COMPANY_NAMES.items())]
     )
@@ -550,6 +754,13 @@ if __name__ == "__main__":
         "Consolidation Breakout": df3,
     })
     log(f"Saved → {OUTFILE}")
+
+    update_consolidated_history({
+        "Probable Upside":        df1,
+        "Support Entry":          df2,
+        "Consolidation Breakout": df3,
+    })
+    log(f"History updated → {HIST_FILE}")
 
     # Cleanup: delete Excel files older than 20 days
     cutoff = datetime.date.today() - datetime.timedelta(days=20)
