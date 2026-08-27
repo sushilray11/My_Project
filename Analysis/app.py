@@ -221,7 +221,7 @@ st.markdown("""
         <div class="nav-title">📊 NSE F&amp;O Analysis</div>
         <div class="nav-subtitle">Futures &amp; Options Screener — <span style="font-size:0.72rem;opacity:0.7;">powered by yfinance</span></div>
     </div>
-    <span class="nav-badge">NSE Live</span>
+    <span class="nav-badge">F&amp;O Live</span>
 </div>
 <div class="content-wrap" style="padding-bottom:0">
 """, unsafe_allow_html=True)
@@ -296,53 +296,41 @@ _COMPANY_NAMES = {
     "UPL":"UPL","UNITDSPR":"United Spirits","VBL":"Varun Beverages","VEDL":"Vedanta",
     "VMM":"Vishal Mega Mart","VOLTAS":"Voltas","WAAREEENER":"Waaree Energies","WIPRO":"Wipro",
     "YESBANK":"Yes Bank","ETERNAL":"Eternal (Zomato)",
+    "ATHERENERG":"Ather Energy","MAHABANK":"Bank of Maharashtra","SAGILITY":"Sagility India",
 }
 
 # NSE index symbols to exclude from F&O stock list
 _FNO_EXCLUDE = {
     "NIFTY","BANKNIFTY","FINNIFTY","MIDCPNIFTY","NIFTYNXT50",
     "NIFTYIT","UNDERLYING","SENSEX","BANKEX","NIFTY50","NIFTY100",
+    "NIFTYFPI","TMPV",
 }
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def _fetch_fno_symbols():
     """
-    Fetch live NSE F&O equity list from NSE's fo_mktlots.csv.
-    Returns a sorted list of NSE symbols, or None on failure.
-    Cached for 24 hours so it's fetched once per day.
+    Fetch live NSE F&O equity list from Zerodha's instruments file.
+    Updated daily, no auth required. Returns sorted list or None on failure.
+    Cached for 24 hours.
     """
     try:
-        import requests, io, re
-        sess = requests.Session()
-        sess.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/124.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-        })
-        # Establish a session/cookie first
-        sess.get("https://www.nseindia.com/", timeout=10)
-        r = sess.get(
-            "https://archives.nseindia.com/content/fo/fo_mktlots.csv",
-            headers={"Referer": "https://www.nseindia.com/"},
-            timeout=15,
-        )
+        import requests, io
+        r = requests.get("https://api.kite.trade/instruments", timeout=20)
         r.raise_for_status()
         df = pd.read_csv(io.StringIO(r.text))
-        col = df.iloc[:, 0].dropna().astype(str).str.strip()
-        syms = [
-            s for s in col
-            if re.match(r'^[A-Z][A-Z0-9&\-]{1,19}$', s) and s not in _FNO_EXCLUDE
-        ]
+        fno = df[(df["exchange"] == "NFO") & (df["instrument_type"] == "FUT")]
+        syms = sorted({
+            str(s).strip() for s in fno["name"].dropna().unique()
+            if str(s).strip() not in _FNO_EXCLUDE
+        })
         if len(syms) >= 50:
-            return sorted(set(syms))
+            return syms
     except Exception:
         pass
     return None
 
 _fno_live   = _fetch_fno_symbols()
-_fno_source = "NSE Live" if _fno_live else "Bundled"
+_fno_source = "Zerodha Live" if _fno_live else "Bundled"
 _FNO = (
     [(s, s, _COMPANY_NAMES.get(s, s)) for s in _fno_live]
     if _fno_live
@@ -441,6 +429,7 @@ _SECTOR = {
     "INDIGO":"Aviation","DELHIVERY":"Logistics","CONCOR":"Logistics",
     # Others
     "ETERNAL":"E-Commerce","NYKAA":"E-Commerce","PAYTM":"Fintech","SWIGGY":"E-Commerce",
+    "ATHERENERG":"Automobile","MAHABANK":"Financial Services","SAGILITY":"Healthcare",
 }
 
 @st.cache_data(ttl=300)
@@ -619,7 +608,7 @@ if st.session_state.get("swing_requested"):
         _swing_df = (
             pd.DataFrame(_swing_data)
             .sort_values(["Score /11", "5D Ret (%)"], ascending=[False, False])
-            .head(25)
+            .head(20)
             .reset_index(drop=True)
         )
         _swing_df.index += 1
@@ -826,7 +815,7 @@ if st.session_state.get("support_requested"):
         _sup_df = (
             pd.DataFrame(_sup_data)
             .sort_values(["Score /8", "R:R", "Gap %"], ascending=[False, False, True])
-            .head(25)
+            .head(20)
             .reset_index(drop=True)
         )
         _sup_df.index += 1
@@ -1034,7 +1023,7 @@ if st.session_state.get("consol_requested"):
             pd.DataFrame(_con_data)
             .sort_values(["Score /8", "Days Consol.", "10D Range %"],
                          ascending=[False, False, True])
-            .head(25)
+            .head(20)
             .reset_index(drop=True)
         )
         _con_df.index += 1
