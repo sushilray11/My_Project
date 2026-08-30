@@ -566,8 +566,8 @@ if st.session_state.get("swing_requested"):
                 _vol_s   = _vol_df2[_ticker2].reindex(_cls_s.index).fillna(0)
                 _cls     = list(_cls_s.astype(float))
                 _vols    = list(_vol_s.astype(float))
-                _high_s  = _hist2["High"][_ticker2].reindex(_cls_s.index).fillna(method="ffill")
-                _low_s   = _hist2["Low"][_ticker2].reindex(_cls_s.index).fillna(method="ffill")
+                _high_s  = _hist2["High"][_ticker2].reindex(_cls_s.index).ffill()
+                _low_s   = _hist2["Low"][_ticker2].reindex(_cls_s.index).ffill()
                 _highs   = list(_high_s.astype(float))
                 _lows    = list(_low_s.astype(float))
 
