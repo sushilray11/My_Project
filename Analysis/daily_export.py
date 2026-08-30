@@ -23,6 +23,11 @@ NOW       = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 OUTFILE   = os.path.join(EXPORTS_DIR, f"screener_{TODAY}.xlsx")
 HIST_FILE = os.path.join(EXPORTS_DIR, "consolidated_history.xlsx")
 
+# exit on weekends — no trading, no files
+if datetime.date.today().weekday() >= 5:
+    print(f"[{NOW}] Weekend — skipping export (market closed). Run on a weekday.", flush=True)
+    raise SystemExit(0)
+
 def log(msg):
     print(f"[{datetime.datetime.now():%H:%M:%S}] {msg}", flush=True)
 
@@ -235,9 +240,13 @@ def calc_ema(prices, n):
     return e
 
 # ── Screener 1: Probable Upside ───────────────────────────────────────────────
+_UPSIDE_BLACKLIST = set()
+
 def run_probable_upside(fno, close_df, vol_df):
     rows = []
     for sym, nse, name in fno:
+        if nse in _UPSIDE_BLACKLIST:
+            continue
         try:
             ticker = f"{nse}.NS"
             cls_s  = close_df[ticker].dropna()
@@ -246,62 +255,74 @@ def run_probable_upside(fno, close_df, vol_df):
             vols   = list(vol_s.astype(float))
             if len(cls) < 20:
                 continue
-            cur       = cls[-1]
-            sma20     = sum(cls[-20:]) / 20
-            sma50     = sum(cls[-min(50, len(cls)):]) / min(50, len(cls))
-            sma200    = sum(cls[-200:]) / 200 if len(cls) >= 200 else sum(cls) / len(cls)
+            cur    = cls[-1]
+            sma20  = sum(cls[-20:]) / 20
+            sma50  = sum(cls[-min(50, len(cls)):]) / min(50, len(cls))
+            sma200 = sum(cls[-200:]) / 200 if len(cls) >= 200 else sum(cls) / len(cls)
+            above200 = cur > sma200
+            if not above200:
+                continue
             sma20_rise = (sum(cls[-5:]) / 5) > (sum(cls[-10:-5]) / 5)
             gains  = [max(cls[i] - cls[i-1], 0) for i in range(1, len(cls))]
             losses = [max(cls[i-1] - cls[i], 0) for i in range(1, len(cls))]
             ag = sum(gains[-14:])  / 14 if len(gains)  >= 14 else 0
             al = sum(losses[-14:]) / 14 if len(losses) >= 14 else 1
-            rsi = 100 - (100 / (1 + ag / al))
-            base5  = cls[-6] if len(cls) >= 6 else cls[0]
-            ret5d  = round((cur - base5) / base5 * 100, 2) if base5 else 0
-            avg20v = sum(vols[-20:]) / 20 if len(vols) >= 20 else 0
-            avg5v  = sum(vols[-5:])  / 5  if len(vols) >= 5  else 0
-            vol_surge  = bool(avg20v and avg5v > avg20v * 1.1)
-            high20     = max(cls[-20:])
-            near_high  = cur >= high20 * 0.95
-            ema12      = calc_ema(cls[-30:], 12) if len(cls) >= 30 else cur
-            ema26      = calc_ema(cls[-50:], 26) if len(cls) >= 50 else cur
-            macd_bull  = ema12 > ema26
-            golden     = sma20 > sma50
-            above200   = cur > sma200
-            macd_series = []
-            for j in range(14, -1, -1):
-                eidx = len(cls) - j
-                if eidx >= 26:
-                    sl = cls[max(0, eidx - 60):eidx]
-                    macd_series.append(calc_ema(sl, 12) - calc_ema(sl, 26))
-            if len(macd_series) >= 9:
-                macd_hist_bull = macd_series[-1] > calc_ema(macd_series, 9)
-            else:
-                macd_hist_bull = macd_bull
-            consec_up = (len(cls) >= 3 and cls[-1] > cls[-2] and cls[-2] > cls[-3])
+            rsi = 100 if al == 0 else 100 - (100 / (1 + ag / al))
+            if rsi >= 82:
+                continue
+            base5 = cls[-6] if len(cls) >= 6 else cls[0]
+            ret5d = round((cur - base5) / base5 * 100, 2) if base5 else 0
+            golden   = sma20 > sma50
+            sma_full = sma50 > sma200
+            ema12    = calc_ema(cls[-30:], 12) if len(cls) >= 30 else cur
+            ema26    = calc_ema(cls[-50:], 26) if len(cls) >= 50 else cur
+            macd_pos = ema12 > ema26
+            # up-volume dominance: compare avg volume on up days vs down days (last 10 sessions)
+            up_vol = sum(vols[i] for i in range(-10, 0) if i > -len(cls) and cls[i] >= cls[i-1])
+            dn_vol = sum(vols[i] for i in range(-10, 0) if i > -len(cls) and cls[i] <  cls[i-1])
+            up_vol_dom = up_vol > dn_vol
+            high52w  = max(cls[-min(252, len(cls)):])
+            near_52w = cur >= high52w * 0.88
             score = sum([
-                cur > sma20, sma20_rise, cur > sma50, 40 <= rsi <= 65,
-                ret5d > 0, vol_surge, near_high, golden, above200,
-                macd_hist_bull, consec_up,
+                cur > sma20,       # 1. above short-term trend
+                sma20_rise,        # 2. short-term trend rising
+                cur > sma50,       # 3. above medium trend
+                sma_full,          # 4. full uptrend (sma50 > sma200)
+                50 <= rsi <= 78,   # 5. momentum sweet spot, not overbought
+                ret5d > 1.0,       # 6. meaningful 5-day momentum
+                up_vol_dom,        # 7. buyers dominating volume
+                golden,            # 8. golden cross
+                macd_pos,          # 9. MACD line positive
+                near_52w,          # 10. near 52-week high
             ])
-            if score >= 6:
+            if score == 10:
+                quality = "Prime"
+            elif score >= 8:
+                quality = "Sweet Spot"
+            else:
+                quality = "Strong"
+            if score >= 7:
                 rows.append({
                     "Stock": nse, "Company": name, "Sector": SECTOR.get(nse, "Other"),
                     "Price (₹)": round(cur, 2), "5D Ret (%)": ret5d,
-                    "RSI": round(rsi, 1), "Vol Surge": "Yes" if vol_surge else "No",
-                    "Near High": "Yes" if near_high else "No",
+                    "RSI": round(rsi, 1), "Up-Vol Dom": "Yes" if up_vol_dom else "No",
+                    "Near 52W Hi": "Yes" if near_52w else "No",
                     "SMA Align": "Yes" if golden else "No",
-                    "SMA200": "Yes" if above200 else "No",
-                    "MACD Hist": "Yes" if macd_hist_bull else "No",
-                    "Consec Up": "Yes" if consec_up else "No",
-                    "Score /11": score,
+                    "Full Trend": "Yes" if sma_full else "No",
+                    "MACD+": "Yes" if macd_pos else "No",
+                    "Quality": quality,
+                    "Score /10": score,
                     "Chart": f"https://www.tradingview.com/chart/?symbol=NSE:{nse}",
                 })
         except Exception:
             pass
-    df = (pd.DataFrame(rows)
-          .sort_values(["Score /11", "5D Ret (%)"], ascending=[False, False])
-          .head(20).reset_index(drop=True))
+    _SORT_PRIORITY = {"Prime": 0, "Sweet Spot": 1, "Strong": 2}
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df["_pri"] = df["Quality"].map(_SORT_PRIORITY)
+        df = (df.sort_values(["_pri", "5D Ret (%)"], ascending=[True, False])
+                .drop(columns=["_pri"])
+                .head(20).reset_index(drop=True))
     df.index += 1
     return df
 
@@ -328,9 +349,9 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
             sm20  = sum(c[-20:]) / 20
             sm50  = sum(c[-min(50, len(c)):]) / min(50, len(c))
             sm200 = sum(c[-200:]) / 200 if len(c) >= 200 else None
-            sups  = [s for s in slows if s <= p * 1.03]
+            sups  = [s for s in slows if s <= p]
             for sm in [sm20, sm50, sm200]:
-                if sm and sm <= p * 1.03:
+                if sm and sm <= p:
                     sups.append(sm)
             if not sups:
                 continue
@@ -344,13 +365,26 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
                 continue
             gains  = [max(c[i] - c[i-1], 0) for i in range(1, len(c))]
             losses = [max(c[i-1] - c[i], 0) for i in range(1, len(c))]
-            ag = sum(gains[-14:])  / 14 if len(gains)  >= 14 else 0
-            al = sum(losses[-14:]) / 14 if len(losses) >= 14 else 1
-            rsi    = 100 - (100 / (1 + ag / al))
+            if len(gains) >= 14:
+                ag = sum(gains[:14]) / 14
+                al = sum(losses[:14]) / 14
+                for gi, li_rsi in zip(gains[14:], losses[14:]):
+                    ag = (ag * 13 + gi) / 14
+                    al = (al * 13 + li_rsi) / 14
+                rsi = 100 - (100 / (1 + ag / max(al, 1e-10)))
+            else:
+                rsi = 50.0
             bounce = len(c) >= 3 and c[-1] > c[-2] and c[-2] > c[-3]
             dayup  = c[-1] > c[-2]
             avgv   = sum(v[-20:]) / 20 if len(v) >= 20 else 0
-            bvol   = bool(avgv and v[-1] > avgv * 1.1)
+            bvol   = bool(avgv and v[-1] > avgv * 1.5)
+            lower_wick = (
+                len(l) >= 1 and
+                abs(l[-1] - near) / near <= 0.015 and
+                (c[-1] - l[-1]) / max(c[-1], 1) > 0.005
+            )
+            all_sups = [s for s in [sm20, sm50, sm200] + slows if s and s <= p]
+            confluence = sum(1 for s in all_sups if abs(s - near) / near <= 0.015) >= 2
             if sm200 and abs(near - sm200) / sm200 < 0.012:
                 stype = "SMA 200"
             elif abs(near - sm50) / sm50 < 0.012:
@@ -361,12 +395,18 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
                 stype = "Swing Low"
             sma50_20ago    = sum(c[-70:-20]) / 50 if len(c) >= 70 else None
             prior_up       = bool(sma50_20ago and sm50 >= sma50_20ago)
-            sup_touches    = sum(1 for li in l[-120:] if abs(li - near) / near <= 0.02)
+            sup_touches, in_zone = 0, False
+            for li in l[-120:]:
+                at_sup = abs(li - near) / near <= 0.02
+                if at_sup and not in_zone:
+                    sup_touches += 1
+                in_zone = at_sup
             score = sum([
-                gap <= 1.5, bounce, dayup and bvol, 25 <= rsi <= 58,
-                4 <= pb <= 20, pb >= 7, prior_up, sup_touches >= 2,
+                gap <= 1.5, bounce or lower_wick, dayup and bvol,
+                25 <= rsi <= 58, 4 <= pb <= 20, pb >= 7,
+                prior_up, sup_touches >= 2, lower_wick, confluence,
             ])
-            if score >= 4:
+            if score >= 5:
                 buy_lo = round(near * 0.99, 2)
                 buy_hi = round(near * 1.02, 2)
                 stop   = round(near * 0.97, 2)
@@ -382,16 +422,18 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
                     "Gap %": round(gap, 2), "Pullback %": round(pb, 1),
                     "RSI": round(rsi, 1), "Prior Trend": "Yes" if prior_up else "No",
                     "Bounce": "Yes" if bounce else ("Up" if dayup else "No"),
+                    "Lower Wick": "Yes" if lower_wick else "No",
                     "Vol Surge": "Yes" if bvol else "No",
+                    "Confluence": "Yes" if confluence else "No",
                     "Buy Zone": f"₹{buy_lo}–{buy_hi}",
                     "Target (₹)": tgt, "Stop (₹)": stop,
-                    "Risk %": rsk, "R:R": rr, "Score /8": score,
+                    "Risk %": rsk, "R:R": rr, "Score /10": score,
                     "Chart": f"https://www.tradingview.com/chart/?symbol=NSE:{nse}",
                 })
         except Exception:
             pass
     df = (pd.DataFrame(rows)
-          .sort_values(["Score /8", "R:R", "Gap %"], ascending=[False, False, True])
+          .sort_values(["Score /10", "R:R", "Gap %"], ascending=[False, False, True])
           .head(20).reset_index(drop=True))
     df.index += 1
     return df
@@ -436,34 +478,57 @@ def run_consolidation(fno, close_df, high_df, vol_df):
             vol_ratio = round(avgv5 / avgv20, 2) if avgv20 else 1.0
             sma20_5d = sum(c[-25:-5]) / 20 if len(c) >= 25 else sma20
             sma_flat = abs(sma20 - sma20_5d) / sma20 < 0.012
-            above_sma20 = p > sma20
+            above_sma20  = p > sma20
+            sm200_4      = sum(c[-200:]) / 200 if len(c) >= 200 else None
+            above_sma200 = bool(sm200_4 and p > sm200_4)
             sma50_20ago = sum(c[-70:-20]) / 50 if len(c) >= 70 else None
             prior_up    = bool(sma50_20ago and sma50_pre >= sma50_20ago)
-            brk         = round(max(h[-10:]) * 1.005, 2)
+            gains4  = [max(c[i] - c[i-1], 0) for i in range(1, len(c))]
+            losses4 = [max(c[i-1] - c[i], 0) for i in range(1, len(c))]
+            if len(gains4) >= 14:
+                ag4 = sum(gains4[:14]) / 14
+                al4 = sum(losses4[:14]) / 14
+                for gi4, li4 in zip(gains4[14:], losses4[14:]):
+                    ag4 = (ag4 * 13 + gi4) / 14
+                    al4 = (al4 * 13 + li4) / 14
+                rsi4 = 100 - (100 / (1 + ag4 / max(al4, 1e-10)))
+            else:
+                rsi4 = 50.0
+            rsi_ok4 = 45 <= rsi4 <= 68
+            brk         = round(max(h[-days_consol:]) * 1.005, 2)
             pct_to_brk  = round((brk - p) / p * 100, 2)
+            consol_lo   = min(c[-days_consol:])
+            consol_hi   = max(c[-days_consol:])
+            stop4       = round(consol_lo * 0.98, 2)
+            rsk4        = round((p - stop4) / p * 100, 1)
+            tgt4        = round(brk + (consol_hi - consol_lo), 2)
             score = sum([
                 range10 < 3.5, range_contract, bb_sq, near_hi,
-                vol_dry, sma_flat, above_sma20, prior_up,
+                vol_dry, sma_flat, above_sma20, above_sma200,
+                prior_up, rsi_ok4,
             ])
-            if score >= 5:
+            if score >= 6:
                 rows.append({
                     "Stock": nse, "Company": COMPANY_NAMES.get(nse, nse),
                     "Sector": SECTOR.get(nse, "Other"),
                     "Price (₹)": round(p, 2), "Breakout ₹": brk,
-                    "To Breakout%": pct_to_brk, "Days Consol.": days_consol,
+                    "To Breakout%": pct_to_brk, "Target ₹": tgt4,
+                    "Stop ₹": stop4, "Risk %": rsk4,
+                    "Days Consol.": days_consol,
                     "10D Range %": round(range10, 2), "BB Width %": round(bb_w, 2),
-                    "Vol Ratio": vol_ratio,
+                    "Vol Ratio": vol_ratio, "RSI": round(rsi4, 1),
                     "SMA Flat": "Yes" if sma_flat else "No",
                     "Near High": "Yes" if near_hi else "No",
                     "BB Squeeze": "Yes" if bb_sq else "No",
+                    "Above SMA200": "Yes" if above_sma200 else "No",
                     "Prior Trend": "Yes" if prior_up else "No",
-                    "Score /8": score,
+                    "Score /10": score,
                     "Chart": f"https://www.tradingview.com/chart/?symbol=NSE:{nse}",
                 })
         except Exception:
             pass
     df = (pd.DataFrame(rows)
-          .sort_values(["Score /8", "Days Consol.", "10D Range %"],
+          .sort_values(["Score /10", "Days Consol.", "10D Range %"],
                        ascending=[False, False, True])
           .head(20).reset_index(drop=True))
     df.index += 1
@@ -482,7 +547,7 @@ def write_excel(sheets_data):
     ALT_FILL     = PatternFill("solid", fgColor="F8FAFC")
     THIN         = Side(style="thin", color="E2E8F0")
     CELL_BORDER  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-    SCORE_COLS   = {"Score /11", "Score /8", "Score /6"}
+    SCORE_COLS   = {"Score /11", "Score /10", "Score /9", "Score /8", "Score /6"}
 
     wb = Workbook()
     wb.remove(wb.active)  # remove default sheet
@@ -560,35 +625,35 @@ def write_excel(sheets_data):
 
     wb.save(OUTFILE)
 
-# ── Consolidated 20-day history ───────────────────────────────────────────────
+# ── Consolidated history ──────────────────────────────────────────────────────
 def update_consolidated_history(results: dict):
     """
-    Appends today's screener results to consolidated_history.xlsx.
-    Layout per sheet: Stock | Company | date1 | date2 | … (newest right)
-    Keeps only the last 20 days of date columns.
+    Layout per sheet:
+      Row 1 : date1  | date2  | date3  | …  (oldest → newest, left → right)
+      Row 2+: rank-1 stock | rank-2 stock | …  for that date
+    Keeps 1 year of date columns.
     """
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
-    today_str = str(datetime.date.today())
+    # use last market-open day so weekend runs don't create non-trading dates
+    _d = datetime.date.today()
+    while _d.weekday() >= 5:
+        _d -= datetime.timedelta(days=1)
+    today_str = str(_d)
     cutoff    = datetime.date.today() - datetime.timedelta(days=365)
 
     SCORE_COL = {
-        "Probable Upside":        "Score /11",
-        "Support Entry":          "Score /8",
-        "Consolidation Breakout": "Score /8",
-    }
-    MAX_SCORE = {
-        "Probable Upside": 11,
-        "Support Entry":   8,
-        "Consolidation Breakout": 8,
+        "Probable Upside":        "Score /10",
+        "Support Entry":          "Score /10",
+        "Consolidation Breakout": "Score /10",
     }
 
-    # ── Load existing history ──────────────────────────────────────────────────
-    # history[sheet] = {stock: {"company": str, "scores": {date_str: "n/m"}}}
+    # history[sheet][date_str] = [stock1, stock2, …]  (ranked, top first)
     history = {name: {} for name in results}
 
+    # ── Load existing (new format: row1=dates, rows2+=stocks) ─────────────────
     if os.path.exists(HIST_FILE):
         try:
             wb_old = load_workbook(HIST_FILE)
@@ -597,55 +662,47 @@ def update_consolidated_history(results: dict):
                     continue
                 ws = wb_old[sheet_name]
                 headers = [cell.value for cell in ws[1]]
-                date_cols = {}          # col_index (0-based) -> date_str
+                # Only load if first header looks like a date (new format)
+                try:
+                    datetime.date.fromisoformat(str(headers[0])[:10])
+                except Exception:
+                    continue   # old format — skip, rebuild fresh
                 for ci, h in enumerate(headers):
-                    if h and h != "Stock":
-                        try:
-                            d = datetime.date.fromisoformat(str(h)[:10])
-                            if d >= cutoff:
-                                date_cols[ci] = str(d)
-                        except Exception:
-                            pass
-                for row in ws.iter_rows(min_row=2, values_only=True):
-                    stock = str(row[0]).strip() if row[0] else None
-                    if not stock or stock == "None":
+                    if not h:
                         continue
-                    entry = history[sheet_name].setdefault(
-                        stock, {"scores": {}}
-                    )
-                    for ci, date_str in date_cols.items():
-                        if ci < len(row) and row[ci]:
-                            entry["scores"][date_str] = str(row[ci])
+                    try:
+                        d = datetime.date.fromisoformat(str(h)[:10])
+                        if d < cutoff:
+                            continue
+                        stocks = [
+                            str(row[ci]).strip()
+                            for row in ws.iter_rows(min_row=2, values_only=True)
+                            if ci < len(row) and row[ci]
+                        ]
+                        history[sheet_name][str(d)] = stocks
+                    except Exception:
+                        pass
         except Exception:
-            pass   # corrupt file — rebuild from scratch
+            pass
 
     # ── Merge today's results ──────────────────────────────────────────────────
     for sheet_name, df in results.items():
         if df is None or df.empty:
             continue
-        scol  = SCORE_COL.get(sheet_name, "Score /8")
-        mscore = MAX_SCORE.get(sheet_name, 8)
-        for _, row in df.iterrows():
-            stock   = str(row.get("Stock", "")).strip()
-            score   = row.get(scol, "")
-            if not stock:
-                continue
-            entry = history[sheet_name].setdefault(stock, {"scores": {}})
-            try:
-                entry["scores"][today_str] = f"{int(score)}/{mscore}"
-            except Exception:
-                entry["scores"][today_str] = str(score)
+        scol = SCORE_COL.get(sheet_name, "Score /8")
+        sorted_df = df.sort_values(scol, ascending=False)
+        history[sheet_name][today_str] = [
+            str(r.get("Stock", "")).strip()
+            for _, r in sorted_df.iterrows()
+            if str(r.get("Stock", "")).strip()
+        ]
 
     # ── Build workbook ─────────────────────────────────────────────────────────
-    HDR_FILL   = PatternFill("solid", fgColor="1F497D")
-    HDR_FONT   = Font(bold=True, color="FFFFFF", size=10)
-    DATE_FILL  = PatternFill("solid", fgColor="2E75B6")
-    DATE_FONT  = Font(bold=True, color="FFFFFF", size=10)
-    GREEN_FILL = PatternFill("solid", fgColor="C6EFCE")
-    YLLOW_FILL = PatternFill("solid", fgColor="FFEB9C")
-    ALT_FILL   = PatternFill("solid", fgColor="EEF3FB")
-    CENTER     = Alignment(horizontal="center", vertical="center")
-    THIN       = Border(
+    HDR_FILL  = PatternFill("solid", fgColor="1F497D")
+    HDR_FONT  = Font(bold=True, color="FFFFFF", size=10)
+    ALT_FILL  = PatternFill("solid", fgColor="EEF3FB")
+    CENTER    = Alignment(horizontal="center", vertical="center")
+    THIN      = Border(
         left   = Side(style="thin", color="D0D0D0"),
         right  = Side(style="thin", color="D0D0D0"),
         top    = Side(style="thin", color="D0D0D0"),
@@ -660,59 +717,40 @@ def update_consolidated_history(results: dict):
     wb = Workbook()
     wb.remove(wb.active)
 
-    for sheet_name, stock_data in history.items():
-        if not stock_data:
+    for sheet_name, date_data in history.items():
+        if not date_data:
             continue
 
-        all_dates = sorted(
-            {d for e in stock_data.values() for d in e["scores"]
-             if datetime.date.fromisoformat(d) >= cutoff}
-        )
+        all_dates  = sorted(date_data.keys())   # oldest → newest
+        max_stocks = max(len(v) for v in date_data.values())
 
         ws = wb.create_sheet(sheet_name)
         ws.sheet_properties.tabColor = TAB_COLORS.get(sheet_name, "4472C4")
-        ws.freeze_panes = "B2"
+        ws.freeze_panes = "A2"
 
-        # Header row
-        for ci, h in enumerate(["Stock"] + all_dates, 1):
-            cell = ws.cell(row=1, column=ci, value=h)
-            cell.font      = DATE_FONT if ci > 1 else HDR_FONT
-            cell.fill      = DATE_FILL if ci > 1 else HDR_FILL
+        # Row 1: date headers
+        for ci, date_str in enumerate(all_dates, 1):
+            cell = ws.cell(row=1, column=ci, value=date_str)
+            cell.font      = HDR_FONT
+            cell.fill      = HDR_FILL
             cell.alignment = CENTER
             cell.border    = THIN
         ws.row_dimensions[1].height = 22
 
-        # Sort: today's score desc, then alphabetical
-        def _sort_key(item):
-            scr = item[1]["scores"].get(today_str, "")
-            try:
-                return (-int(scr.split("/")[0]), item[0])
-            except Exception:
-                return (0, item[0])
+        # Rows 2+: stock names ranked top→bottom per date column
+        for ri in range(max_stocks):
+            for ci, date_str in enumerate(all_dates, 1):
+                stocks = date_data.get(date_str, [])
+                val    = stocks[ri] if ri < len(stocks) else ""
+                c = ws.cell(row=ri + 2, column=ci, value=val)
+                c.alignment = CENTER
+                c.border    = THIN
+                c.font      = Font(bold=bool(val), size=10)
+                if val and (ri + 2) % 2 == 0:
+                    c.fill = ALT_FILL
 
-        for ri, (stock, entry) in enumerate(sorted(stock_data.items(), key=_sort_key), 2):
-            alt_fill = ALT_FILL if ri % 2 == 0 else None
-
-            c = ws.cell(row=ri, column=1, value=stock)
-            c.font = Font(bold=True, size=10); c.border = THIN; c.alignment = Alignment(vertical="center")
-            if alt_fill: c.fill = alt_fill
-
-            for ci, date_str in enumerate(all_dates, 2):
-                val = entry["scores"].get(date_str, "")
-                c = ws.cell(row=ri, column=ci, value=val)
-                c.alignment = CENTER; c.border = THIN; c.font = Font(size=10)
-                if val:
-                    try:
-                        ratio = int(val.split("/")[0]) / int(val.split("/")[1])
-                        c.fill = GREEN_FILL if ratio >= 0.75 else YLLOW_FILL
-                    except Exception:
-                        c.fill = YLLOW_FILL
-                elif alt_fill:
-                    c.fill = alt_fill
-
-        ws.column_dimensions["A"].width = 18
-        for ci in range(2, len(all_dates) + 2):
-            ws.column_dimensions[get_column_letter(ci)].width = 13
+        for ci in range(1, len(all_dates) + 1):
+            ws.column_dimensions[get_column_letter(ci)].width = 14
 
     wb.save(HIST_FILE)
 

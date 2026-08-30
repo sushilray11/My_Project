@@ -1,0 +1,252 @@
+"""
+Standalone backtest for Analysis project picks.
+Reads consolidated_history.xlsx (last 7 trading dates, all 3 screeners),
+downloads 3-month price data, calculates D+1/D+3/D+5 forward returns,
+prints summary to console, and appends new dates to backtest_results.xlsx.
+"""
+import os, sys, datetime
+import pandas as pd
+import yfinance as yf
+from openpyxl import load_workbook
+
+DIR       = os.path.dirname(os.path.abspath(__file__))
+HIST_FILE = os.path.join(DIR, "exports", "consolidated_history.xlsx")
+OUT_PATH  = os.path.join(DIR, "exports", "backtest_results.xlsx")
+SHEETS    = ["Probable Upside", "Support Entry", "Consolidation Breakout"]
+
+def _log(msg):
+    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+def _hr(series):
+    v = series.dropna()
+    return f"{(v > 0).mean()*100:.1f}%" if len(v) else "N/A"
+
+def _avg(series):
+    v = series.dropna()
+    return f"{v.mean():.2f}%" if len(v) else "N/A"
+
+def _stats(df, label):
+    r = {"Group": label, "Picks": len(df)}
+    for h, col in [("1D", "D+1 %"), ("3D", "D+3 %"), ("5D", "D+5 %")]:
+        v = df[col].dropna()
+        r[f"Hit Rate {h}"]   = f"{(v > 0).mean()*100:.1f}%" if len(v) else "N/A"
+        r[f"Avg Return {h}"] = f"{v.mean():.2f}%"           if len(v) else "N/A"
+    return r
+
+def run():
+    if not os.path.exists(HIST_FILE):
+        _log("ERROR: consolidated_history.xlsx not found. Run daily_export.py first.")
+        sys.exit(1)
+
+    _log("Analysis — Backtest starting")
+
+    # ── Read wide-format history ───────────────────────────────────────────────
+    wb = load_workbook(HIST_FILE, read_only=True, data_only=True)
+    raw_picks = []
+
+    for sheet_name in SHEETS:
+        if sheet_name not in wb.sheetnames:
+            continue
+        ws   = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            continue
+        headers = rows[0]
+
+        # last 7 unique weekday dates on this sheet
+        valid_dates = []
+        for h in headers:
+            if not h:
+                continue
+            try:
+                d = datetime.date.fromisoformat(str(h)[:10])
+                if d.weekday() < 5:
+                    valid_dates.append(str(d))
+            except Exception:
+                pass
+        last7 = sorted(set(valid_dates))[-7:]
+
+        for ci, h in enumerate(headers):
+            if not h:
+                continue
+            try:
+                d_str = str(datetime.date.fromisoformat(str(h)[:10]))
+            except Exception:
+                continue
+            if d_str not in last7:
+                continue
+            for row in rows[1:]:
+                if ci >= len(row) or not row[ci]:
+                    continue
+                sym = str(row[ci]).strip()
+                if sym and sym.upper() != "NONE":
+                    raw_picks.append({"Screener": sheet_name, "Date": d_str, "Stock": sym})
+
+    wb.close()
+
+    if not raw_picks:
+        _log("No picks found in consolidated_history.xlsx.")
+        sys.exit(0)
+
+    picks_df = pd.DataFrame(raw_picks)
+    picks_df["Date"] = pd.to_datetime(picks_df["Date"])
+    _log(f"Found {len(picks_df)} picks across {picks_df['Date'].nunique()} dates from {picks_df['Screener'].nunique()} screeners")
+
+    # ── Download prices ────────────────────────────────────────────────────────
+    all_syms   = picks_df["Stock"].unique().tolist()
+    bt_tickers = [f"{s}.NS" for s in all_syms]
+    _log(f"Downloading 3-month prices for {len(bt_tickers)} stocks…")
+
+    try:
+        dh = yf.download(bt_tickers, period="3mo", auto_adjust=True,
+                         progress=False, threads=True)
+        bt_close = {}
+        try:
+            sub = dh["Close"]
+        except KeyError:
+            sub = None
+        if sub is not None:
+            if isinstance(sub, pd.Series):
+                s = sub.dropna()
+                if len(s):
+                    bt_close[bt_tickers[0]] = s
+            else:
+                for col in sub.columns:
+                    s = sub[col].dropna()
+                    if len(s):
+                        bt_close[col] = s
+    except Exception as e:
+        _log(f"Download error: {e}")
+        bt_close = {}
+
+    # ── Calculate returns ──────────────────────────────────────────────────────
+    today_ts = pd.Timestamp.today().normalize()
+    bt_rows  = []
+
+    for _, row in picks_df.iterrows():
+        pick_date = row["Date"]
+        sym       = row["Stock"]
+        tkr       = f"{sym}.NS"
+        if tkr not in bt_close:
+            continue
+
+        prices     = bt_close[tkr].sort_index()
+        dates_list = list(prices.index)
+
+        # last trading day on or before pick_date (handles weekend picks)
+        pick_pos = None
+        for i, d in enumerate(dates_list):
+            if d <= pick_date:
+                pick_pos = i
+        if pick_pos is None:
+            continue
+        pick_px = float(prices.iloc[pick_pos])
+
+        def _fwd(offset):
+            idx = pick_pos + offset
+            if idx >= len(dates_list) or dates_list[idx] > today_ts:
+                return None, None
+            p = float(prices.iloc[idx])
+            return round(p, 2), round((p - pick_px) / pick_px * 100, 2)
+
+        p1, r1 = _fwd(1)
+        p3, r3 = _fwd(3)
+        p5, r5 = _fwd(5)
+
+        bt_rows.append({
+            "Screener": row["Screener"],
+            "Date":     str(pick_date.date()),
+            "Stock":    sym,
+            "Pick ₹":   round(pick_px, 2),
+            "D+1 %":    r1,
+            "D+1":      "✅" if r1 and r1 > 0 else ("❌" if r1 is not None else "—"),
+            "D+3 %":    r3,
+            "D+3":      "✅" if r3 and r3 > 0 else ("❌" if r3 is not None else "—"),
+            "D+5 %":    r5,
+            "D+5":      "✅" if r5 and r5 > 0 else ("❌" if r5 is not None else "—"),
+        })
+
+    if not bt_rows:
+        _log("No results — not enough forward data yet (need at least D+1 after pick date).")
+        sys.exit(0)
+
+    bt_df = pd.DataFrame(bt_rows)
+
+    # ── Print summary ──────────────────────────────────────────────────────────
+    _log(f"\n{'='*65}")
+    _log(f"BACKTEST SUMMARY  ({len(bt_df)} picks across {bt_df['Date'].nunique()} dates)")
+    _log(f"{'='*65}")
+    _log(f"All Picks   — 1D: {_hr(bt_df['D+1 %'])}  3D: {_hr(bt_df['D+3 %'])}  5D: {_hr(bt_df['D+5 %'])}")
+    for screener in SHEETS:
+        sub = bt_df[bt_df["Screener"] == screener]
+        if len(sub):
+            _log(f"{screener[:20]:20s} — 1D: {_hr(sub['D+1 %'])}  3D: {_hr(sub['D+3 %'])}  5D: {_hr(sub['D+5 %'])}")
+    _log(f"{'='*65}\n")
+
+    # ── Save Excel (upsert — update pending returns, append new picks) ───────────
+    RET_COLS = ["D+1 %", "D+1", "D+3 %", "D+3", "D+5 %", "D+5"]
+    KEY_COLS = ["Screener", "Date", "Stock"]
+
+    def _upsert(existing, new):
+        if existing is None or len(existing) == 0:
+            return new.copy()
+        for df in [existing, new]:
+            for c in KEY_COLS:
+                if c in df.columns:
+                    df[c] = df[c].astype(str).str.strip()
+        key_idx = {(r["Screener"], r["Date"], r["Stock"]): i
+                   for i, r in existing.iterrows()}
+        new_rows = []
+        for _, row in new.iterrows():
+            k = (str(row["Screener"]), str(row["Date"]), str(row["Stock"]))
+            if k in key_idx:
+                ei = key_idx[k]
+                for col in RET_COLS:
+                    if col in row and col in existing.columns:
+                        v = row[col]
+                        if v is not None and str(v) not in ("—", "nan", "None", ""):
+                            existing.at[ei, col] = v
+            else:
+                new_rows.append(row.to_dict())
+        if new_rows:
+            existing = pd.concat([existing, pd.DataFrame(new_rows)], ignore_index=True)
+        return existing
+
+    if os.path.exists(OUT_PATH):
+        try:
+            existing = pd.read_excel(OUT_PATH, sheet_name="Pick Results", dtype=str)
+            combined = _upsert(existing, bt_df.astype(str))
+        except Exception:
+            combined = bt_df.astype(str)
+    else:
+        combined = bt_df.astype(str)
+
+    for col in ["D+1 %", "D+3 %", "D+5 %"]:
+        combined[col] = pd.to_numeric(combined[col], errors="coerce")
+
+    # keep only last 30 days
+    combined["Date"] = pd.to_datetime(combined["Date"], errors="coerce")
+    cutoff = pd.Timestamp.today() - pd.Timedelta(days=30)
+    combined = combined[combined["Date"] >= cutoff]
+    combined["Date"] = combined["Date"].dt.strftime("%Y-%m-%d")
+
+    summary_rows = [_stats(combined, "All Picks")]
+    for screener in SHEETS:
+        sub = combined[combined["Screener"] == screener]
+        if len(sub):
+            summary_rows.append(_stats(sub, screener))
+
+    with pd.ExcelWriter(OUT_PATH, engine="openpyxl") as writer:
+        combined.to_excel(writer, sheet_name="Pick Results", index=False)
+        pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+
+    _log(f"Saved → {OUT_PATH}  ({len(combined)} total rows)")
+
+if __name__ == "__main__":
+    try:
+        run()
+    except Exception as e:
+        _log(f"FATAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
