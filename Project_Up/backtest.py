@@ -164,11 +164,8 @@ def run():
             "Score":   row.get("Score /10"),
             "Pick ₹":  round(pick_px, 2),
             "D+1 ₹":   p1,  "D+1 %": r1,
-            "D+1":     "✅" if r1 and r1 > 0 else ("❌" if r1 is not None else "—"),
             "D+3 ₹":   p3,  "D+3 %": r3,
-            "D+3":     "✅" if r3 and r3 > 0 else ("❌" if r3 is not None else "—"),
             "D+5 ₹":   p5,  "D+5 %": r5,
-            "D+5":     "✅" if r5 and r5 > 0 else ("❌" if r5 is not None else "—"),
         })
 
     if not bt_rows:
@@ -192,7 +189,7 @@ def run():
         _log(f"Score 5-7 ({len(lo)} picks): 1D {_hr(lo['D+1 %'])}  3D {_hr(lo['D+3 %'])}  5D {_hr(lo['D+5 %'])}")
     _log(f"{'='*60}\n")
 
-    RET_COLS = ["D+1 ₹","D+3 ₹","D+5 ₹","D+1 %","D+1","D+3 %","D+3","D+5 %","D+5"]
+    RET_COLS = ["D+1 ₹","D+3 ₹","D+5 ₹","D+1 %","D+3 %","D+5 %"]
     KEY_COLS = ["Date", "Stock"]
 
     def _upsert_up(existing, new):

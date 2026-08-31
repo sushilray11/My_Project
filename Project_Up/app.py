@@ -735,11 +735,8 @@ with tab2:
                     "Score":      row.get("Score /10"),
                     "Pick ₹":     round(pick_px, 2),
                     "D+1 ₹":      p1,   "D+1 %":  r1,
-                    "D+1":        "✅" if r1 and r1 > 0 else ("❌" if r1 is not None else "—"),
                     "D+3 ₹":      p3,   "D+3 %":  r3,
-                    "D+3":        "✅" if r3 and r3 > 0 else ("❌" if r3 is not None else "—"),
                     "D+5 ₹":      p5,   "D+5 %":  r5,
-                    "D+5":        "✅" if r5 and r5 > 0 else ("❌" if r5 is not None else "—"),
                 })
 
             st.session_state["bt_data"] = bt_rows
@@ -792,7 +789,7 @@ with tab2:
 
         st.markdown("#### Pick-by-Pick Results")
         disp_cols = ["Date","Stock","Company","Score","Pick ₹",
-                     "D+1 %","D+1","D+3 %","D+3","D+5 %","D+5"]
+                     "D+1 ₹","D+1 %","D+3 ₹","D+3 %","D+5 ₹","D+5 %"]
         st.dataframe(
             bt_df[[c for c in disp_cols if c in bt_df.columns]],
             use_container_width=True,
@@ -819,7 +816,7 @@ with tab2:
                     r[f"Avg Return {h}"] = f"{v.mean():.2f}%"          if len(v) else "N/A"
                 return r
 
-            _RET_COLS = ["D+1 ₹","D+3 ₹","D+5 ₹","D+1 %","D+1","D+3 %","D+3","D+5 %","D+5"]
+            _RET_COLS = ["D+1 ₹","D+3 ₹","D+5 ₹","D+1 %","D+3 %","D+5 %"]
             _KEY_COLS = ["Date", "Stock"]
 
             def _upsert_up(existing, new):

@@ -1,6 +1,6 @@
 import os, sys
 
-_DIR = r"D:\My_Project\Project_Up"
+_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Project_Up")
 _app_path = os.path.join(_DIR, "app.py")
 if _DIR not in sys.path:
     sys.path.insert(0, _DIR)

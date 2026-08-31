@@ -1479,11 +1479,8 @@ if st.session_state.get("analysis_bt_requested") and "analysis_bt_data" not in s
                     "Stock":    sym,
                     "Pick ₹":   round(pick_px, 2),
                     "D+1 %":    r1,
-                    "D+1":      "✅" if r1 and r1 > 0 else ("❌" if r1 is not None else "—"),
                     "D+3 %":    r3,
-                    "D+3":      "✅" if r3 and r3 > 0 else ("❌" if r3 is not None else "—"),
                     "D+5 %":    r5,
-                    "D+5":      "✅" if r5 and r5 > 0 else ("❌" if r5 is not None else "—"),
                 })
 
             st.session_state["analysis_bt_data"] = bt_rows
@@ -1553,7 +1550,7 @@ if "analysis_bt_data" in st.session_state:
             disp = disp[disp["Stock"].str.contains(stock_filter.strip(), case=False, na=False)]
 
         st.dataframe(
-            disp[["Screener","Date","Stock","Pick ₹","D+1 %","D+1","D+3 %","D+3","D+5 %","D+5"]],
+            disp[["Screener","Date","Stock","Pick ₹","D+1 %","D+3 %","D+5 %"]],
             use_container_width=True,
             height=min(700, 56 + len(disp) * 35),
             column_config={
@@ -1568,7 +1565,7 @@ if "analysis_bt_data" in st.session_state:
         # ── Save Excel (upsert — update pending returns, append new picks) ────────
         bt_out = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "exports", "backtest_results.xlsx")
         try:
-            _RET_COLS = ["D+1 %", "D+1", "D+3 %", "D+3", "D+5 %", "D+5"]
+            _RET_COLS = ["D+1 %", "D+3 %", "D+5 %"]
             _KEY_COLS = ["Screener", "Date", "Stock"]
 
             def _upsert(existing, new):

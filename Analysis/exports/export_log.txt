@@ -20,37 +20,3 @@
 [15:00:18] Consolidation Breakout: 20 candidates
 [15:00:19] Saved â†’ /Users/I325211/Local_Project/Analysis/exports/screener_2026-08-31.xlsx
 [15:00:19] History updated â†’ /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
-[15:17:49] NSE F&O Daily Export starting…
-[15:17:49] F&O list: 209 stocks (Cache (fresh))
-[15:17:49] Downloading 1Y price history for all stocks…
-[15:17:56] Download complete. Running screeners…
-[15:17:56] Probable Upside:        20 candidates
-[15:17:56] Support Entry:          20 candidates
-[15:17:56] Consolidation Breakout: 20 candidates
-Traceback (most recent call last):
-  File "D:\My_Project\Analysis\daily_export.py", line 920, in <module>
-    log(f"Saved \u2192 {OUTFILE}")
-  File "D:\My_Project\Analysis\daily_export.py", line 32, in log
-    print(f"[{datetime.datetime.now():%H:%M:%S}] {msg}", flush=True)
-  File "C:\Users\Dell\AppData\Local\Programs\Python\Python312\Lib\encodings\cp1252.py", line 19, in encode
-    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 17: character maps to <undefined>
-[31-08-2026 15:17:57.01] Export failed with error code 1 
-[15:18:29] NSE F&O Daily Export starting…
-[15:18:29] F&O list: 209 stocks (Cache (fresh))
-[15:18:29] Downloading 1Y price history for all stocks…
-[15:18:39] Download complete. Running screeners…
-[15:18:39] Probable Upside:        20 candidates
-[15:18:39] Support Entry:          20 candidates
-[15:18:40] Consolidation Breakout: 20 candidates
-Traceback (most recent call last):
-  File "D:\My_Project\Analysis\daily_export.py", line 920, in <module>
-    log(f"Saved \u2192 {OUTFILE}")
-  File "D:\My_Project\Analysis\daily_export.py", line 32, in log
-    print(f"[{datetime.datetime.now():%H:%M:%S}] {msg}", flush=True)
-  File "C:\Users\Dell\AppData\Local\Programs\Python\Python312\Lib\encodings\cp1252.py", line 19, in encode
-    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 17: character maps to <undefined>
-[31-08-2026 15:18:40.50] Export failed with error code 1 

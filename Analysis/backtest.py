@@ -211,11 +211,8 @@ def run():
             "Stock":    sym,
             "Pick ₹":   round(pick_px, 2),
             "D+1 %":    r1,
-            "D+1":      "✅" if r1 and r1 > 0 else ("❌" if r1 is not None else "—"),
             "D+3 %":    r3,
-            "D+3":      "✅" if r3 and r3 > 0 else ("❌" if r3 is not None else "—"),
             "D+5 %":    r5,
-            "D+5":      "✅" if r5 and r5 > 0 else ("❌" if r5 is not None else "—"),
         })
 
     if not bt_rows:
@@ -236,7 +233,7 @@ def run():
     _log(f"{'='*65}\n")
 
     # ── Save Excel (upsert — update pending returns, append new picks) ───────────
-    RET_COLS = ["D+1 %", "D+1", "D+3 %", "D+3", "D+5 %", "D+5"]
+    RET_COLS = ["D+1 %", "D+3 %", "D+5 %"]
     KEY_COLS = ["Screener", "Date", "Stock"]
 
     def _upsert(existing, new):
