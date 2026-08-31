@@ -105,6 +105,50 @@ def _get_mcap(sym_ns, mcap_data):
     mcap_data[sym_ns] = {"mcap": mc, "date": today}
     return mc
 
+def _write_formatted_excel(path, sheets):
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    HDR_FILL = PatternFill("solid", fgColor="1D4ED8")
+    HDR_FONT = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL = PatternFill("solid", fgColor="EFF6FF")
+    SCR_HI   = PatternFill("solid", fgColor="D1FAE5")
+    SCR_MED  = PatternFill("solid", fgColor="FEF9C3")
+    THIN     = Side(style="thin", color="E2E8F0")
+    BORDER   = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER   = Alignment(horizontal="center", vertical="center")
+    wb = Workbook()
+    wb.remove(wb.active)
+    for sheet_name, df in sheets.items():
+        ws = wb.create_sheet(title=sheet_name[:31])
+        if df.empty:
+            ws["A1"] = "No data"; continue
+        cols = list(df.columns)
+        for ci, col in enumerate(cols, 1):
+            c = ws.cell(row=1, column=ci, value=col)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.alignment = CENTER; c.border = BORDER
+        ws.row_dimensions[1].height = 24
+        ws.freeze_panes = "A2"
+        for ri, (_, row) in enumerate(df.iterrows(), 2):
+            for ci, col in enumerate(cols, 1):
+                val = row[col]
+                c = ws.cell(row=ri, column=ci, value=val)
+                c.border = BORDER; c.alignment = CENTER
+                if ri % 2 == 0:
+                    c.fill = ALT_FILL
+                if col in ("Score /10", "Score"):
+                    try:
+                        sv = float(val)
+                        c.fill = SCR_HI if sv >= 8 else SCR_MED
+                        c.font = Font(bold=True, size=10)
+                    except (TypeError, ValueError):
+                        pass
+        for ci, col in enumerate(cols, 1):
+            ml = max((len(str(ws.cell(r, ci).value or "")) for r in range(1, ws.max_row + 1)), default=8)
+            ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
+    wb.save(path)
+
 def _save_history(rows, top_n=20):
     if not rows:
         return
@@ -128,7 +172,7 @@ def _save_history(rows, top_n=20):
             combined = df_new.astype(str)
     else:
         combined = df_new.astype(str)
-    combined.to_excel(HIST_PATH, index=False)
+    _write_formatted_excel(HIST_PATH, {"History": combined})
     _log(f"Saved {len(df_new)} rows to history.xlsx")
 
 def run():

@@ -11,6 +11,58 @@ DIR       = os.path.dirname(os.path.abspath(__file__))
 HIST_PATH = os.path.join(DIR, "history.xlsx")
 OUT_PATH  = os.path.join(DIR, "backtest_results.xlsx")
 
+def _write_formatted_excel(path, sheets):
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    HDR_FILL = PatternFill("solid", fgColor="1D4ED8")
+    HDR_FONT = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL = PatternFill("solid", fgColor="EFF6FF")
+    POS_FILL = PatternFill("solid", fgColor="DCFCE7")
+    NEG_FILL = PatternFill("solid", fgColor="FEE2E2")
+    SCR_HI   = PatternFill("solid", fgColor="D1FAE5")
+    SCR_MED  = PatternFill("solid", fgColor="FEF9C3")
+    THIN     = Side(style="thin", color="E2E8F0")
+    BORDER   = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER   = Alignment(horizontal="center", vertical="center")
+    wb = Workbook()
+    wb.remove(wb.active)
+    for sheet_name, df in sheets.items():
+        ws = wb.create_sheet(title=sheet_name[:31])
+        if df.empty:
+            ws["A1"] = "No data"; continue
+        cols = list(df.columns)
+        for ci, col in enumerate(cols, 1):
+            c = ws.cell(row=1, column=ci, value=col)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.alignment = CENTER; c.border = BORDER
+        ws.row_dimensions[1].height = 24
+        ws.freeze_panes = "A2"
+        for ri, (_, row) in enumerate(df.iterrows(), 2):
+            for ci, col in enumerate(cols, 1):
+                val = row[col]
+                c = ws.cell(row=ri, column=ci, value=val)
+                c.border = BORDER; c.alignment = CENTER
+                if ri % 2 == 0:
+                    c.fill = ALT_FILL
+                if "%" in str(col) and col not in ("Score /10",):
+                    try:
+                        fv = float(val)
+                        c.fill = POS_FILL if fv > 0 else NEG_FILL
+                    except (TypeError, ValueError):
+                        pass
+                if col in ("Score /10", "Score"):
+                    try:
+                        sv = float(val)
+                        c.fill = SCR_HI if sv >= 8 else SCR_MED
+                        c.font = Font(bold=True, size=10)
+                    except (TypeError, ValueError):
+                        pass
+        for ci in range(1, len(cols) + 1):
+            ml = max((len(str(ws.cell(r, ci).value or "")) for r in range(1, ws.max_row + 1)), default=8)
+            ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
+    wb.save(path)
+
 def _log(msg):
     print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
@@ -192,9 +244,10 @@ def run():
     if len(hi_c): summary_rows.append(_stats(hi_c, "Score ≥ 8"))
     if len(lo_c): summary_rows.append(_stats(lo_c, "Score 5–7"))
 
-    with pd.ExcelWriter(OUT_PATH, engine="openpyxl") as writer:
-        combined_bt.to_excel(writer, sheet_name="Pick Results", index=False)
-        pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+    _write_formatted_excel(OUT_PATH, {
+        "Pick Results": combined_bt,
+        "Summary":      pd.DataFrame(summary_rows),
+    })
 
     _log(f"Saved → {OUT_PATH}  ({len(combined_bt)} total rows)")
 

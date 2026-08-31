@@ -242,7 +242,7 @@ def calc_ema(prices, n):
 # ── Screener 1: Probable Upside ───────────────────────────────────────────────
 _UPSIDE_BLACKLIST = set()
 
-def run_probable_upside(fno, close_df, vol_df):
+def run_probable_upside(fno, close_df, vol_df, low_df):
     rows = []
     for sym, nse, name in fno:
         if nse in _UPSIDE_BLACKLIST:
@@ -251,67 +251,100 @@ def run_probable_upside(fno, close_df, vol_df):
             ticker = f"{nse}.NS"
             cls_s  = close_df[ticker].dropna()
             vol_s  = vol_df[ticker].reindex(cls_s.index).fillna(0)
+            low_s  = low_df[ticker].reindex(cls_s.index).ffill()
             cls    = list(cls_s.astype(float))
             vols   = list(vol_s.astype(float))
-            if len(cls) < 20:
+            lows   = list(low_s.astype(float))
+
+            if len(cls) < 60 or len(lows) < 11 or len(vols) < 20:
                 continue
+
             cur    = cls[-1]
             sma20  = sum(cls[-20:]) / 20
             sma50  = sum(cls[-min(50, len(cls)):]) / min(50, len(cls))
             sma200 = sum(cls[-200:]) / 200 if len(cls) >= 200 else sum(cls) / len(cls)
-            above200 = cur > sma200
-            if not above200:
+
+            # hard filter: above SMA200
+            if cur <= sma200:
                 continue
-            sma20_rise = (sum(cls[-5:]) / 5) > (sum(cls[-10:-5]) / 5)
+
+            # RSI (14)
             gains  = [max(cls[i] - cls[i-1], 0) for i in range(1, len(cls))]
             losses = [max(cls[i-1] - cls[i], 0) for i in range(1, len(cls))]
             ag = sum(gains[-14:])  / 14 if len(gains)  >= 14 else 0
             al = sum(losses[-14:]) / 14 if len(losses) >= 14 else 1
             rsi = 100 if al == 0 else 100 - (100 / (1 + ag / al))
-            if rsi >= 82:
+
+            # hard filter: not overbought
+            if rsi >= 80:
                 continue
-            base5 = cls[-6] if len(cls) >= 6 else cls[0]
-            ret5d = round((cur - base5) / base5 * 100, 2) if base5 else 0
-            golden   = sma20 > sma50
-            sma_full = sma50 > sma200
-            ema12    = calc_ema(cls[-30:], 12) if len(cls) >= 30 else cur
-            ema26    = calc_ema(cls[-50:], 26) if len(cls) >= 50 else cur
-            macd_pos = ema12 > ema26
-            # up-volume dominance: compare avg volume on up days vs down days (last 10 sessions)
-            up_vol = sum(vols[i] for i in range(-10, 0) if i > -len(cls) and cls[i] >= cls[i-1])
-            dn_vol = sum(vols[i] for i in range(-10, 0) if i > -len(cls) and cls[i] <  cls[i-1])
-            up_vol_dom = up_vol > dn_vol
-            high52w  = max(cls[-min(252, len(cls)):])
-            near_52w = cur >= high52w * 0.88
+
+            ema12  = calc_ema(cls[-30:],  12) if len(cls) >= 30  else cur
+            ema26  = calc_ema(cls[-50:],  26) if len(cls) >= 50  else cur
+            e20    = calc_ema(cls[-40:],  20) if len(cls) >= 40  else sma20
+            e50    = calc_ema(cls[-100:], 50) if len(cls) >= 100 else sma50
+            avgv20 = sum(vols[-20:]) / 20
+
+            # 1. Golden alignment: SMA20 > SMA50
+            golden_align = sma20 > sma50
+            # 2. Full trend: SMA50 > SMA200
+            sma_full     = sma50 > sma200
+            # 3. SMA20 rising
+            sma20_rising = (sum(cls[-5:]) / 5) > (sum(cls[-10:-5]) / 5)
+            # 4. MACD positive
+            macd_pos     = ema12 > ema26
+            # 5. RSI healthy zone
+            rsi_zone     = 45 <= rsi <= 72
+            # 6. Net accumulation (10D)
+            up_v10 = sum(vols[i] for i in range(-10, 0) if cls[i] >= cls[i-1])
+            dn_v10 = sum(vols[i] for i in range(-10, 0) if cls[i] <  cls[i-1])
+            net_accum    = up_v10 > dn_v10 * 1.2
+            # 7. Vol dry-up
+            vol_dryup    = bool(avgv20 and vols[-1] < avgv20 * 0.70)
+            # 8. At support (near EMA20 or EMA50)
+            at_support   = (
+                (-0.02 <= (cur / e20 - 1) <= 0.04) or
+                (-0.01 <= (cur / e50 - 1) <= 0.03)
+            )
+            # 9. Rising lows (7D)
+            rising_lows  = bool(
+                len(lows) >= 7 and
+                lows[-1] > lows[-4] and lows[-4] > lows[-7]
+            )
+            # 10. Entry trigger
+            entry_trigger = bool(
+                len(vols) >= 2 and len(cls) >= 2 and
+                vols[-1] > vols[-2] and cls[-1] > cls[-2]
+            )
+
             score = sum([
-                cur > sma20,       # 1. above short-term trend
-                sma20_rise,        # 2. short-term trend rising
-                cur > sma50,       # 3. above medium trend
-                sma_full,          # 4. full uptrend (sma50 > sma200)
-                50 <= rsi <= 78,   # 5. momentum sweet spot, not overbought
-                ret5d > 1.0,       # 6. meaningful 5-day momentum
-                up_vol_dom,        # 7. buyers dominating volume
-                golden,            # 8. golden cross
-                macd_pos,          # 9. MACD line positive
-                near_52w,          # 10. near 52-week high
+                golden_align, sma_full, sma20_rising, macd_pos,
+                rsi_zone, net_accum, vol_dryup, at_support,
+                rising_lows, entry_trigger,
             ])
+
             if score == 10:
                 quality = "Prime"
             elif score >= 8:
                 quality = "Sweet Spot"
             else:
                 quality = "Strong"
+
             if score >= 7:
+                vol_ratio = round(vols[-1] / avgv20, 2) if avgv20 else 0.0
                 rows.append({
-                    "Stock": nse, "Company": name, "Sector": SECTOR.get(nse, "Other"),
-                    "Price (₹)": round(cur, 2), "5D Ret (%)": ret5d,
-                    "RSI": round(rsi, 1), "Up-Vol Dom": "Yes" if up_vol_dom else "No",
-                    "Near 52W Hi": "Yes" if near_52w else "No",
-                    "SMA Align": "Yes" if golden else "No",
-                    "Full Trend": "Yes" if sma_full else "No",
-                    "MACD+": "Yes" if macd_pos else "No",
-                    "Quality": quality,
-                    "Score /10": score,
+                    "Stock": nse, "Company": name,
+                    "Sector": SECTOR.get(nse, "Other"),
+                    "Price (₹)": round(cur, 2),
+                    "RSI": round(rsi, 1),
+                    "Vol Ratio": vol_ratio,
+                    "Net Accum":    "Yes" if net_accum     else "No",
+                    "At Support":   "Yes" if at_support    else "No",
+                    "Rising Lows":  "Yes" if rising_lows   else "No",
+                    "Entry Trigger":"Yes" if entry_trigger else "No",
+                    "Full Trend":   "Yes" if sma_full      else "No",
+                    "Quality":      quality,
+                    "Score /10":    score,
                     "Chart": f"https://www.tradingview.com/chart/?symbol=NSE:{nse}",
                 })
         except Exception:
@@ -320,7 +353,7 @@ def run_probable_upside(fno, close_df, vol_df):
     df = pd.DataFrame(rows)
     if not df.empty:
         df["_pri"] = df["Quality"].map(_SORT_PRIORITY)
-        df = (df.sort_values(["_pri", "5D Ret (%)"], ascending=[True, False])
+        df = (df.sort_values(["_pri", "Score /10", "Vol Ratio"], ascending=[True, False, False])
                 .drop(columns=["_pri"])
                 .head(20).reset_index(drop=True))
     df.index += 1
@@ -331,103 +364,162 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
     rows = []
     for _, nse, _ in fno:
         try:
-            tk   = f"{nse}.NS"
-            cs   = close_df[tk].dropna()
-            c    = list(cs.astype(float))
-            l    = list(low_df[tk].dropna().astype(float))
-            hs   = list(high_df[tk].dropna().astype(float))
-            v    = list(vol_df[tk].reindex(cs.index).fillna(0).astype(float))
-            if len(c) < 30:
+            tk  = f"{nse}.NS"
+            cs  = close_df[tk].dropna()
+            c   = list(cs.astype(float))
+            l   = list(low_df[tk].dropna().astype(float))
+            hs  = list(high_df[tk].dropna().astype(float))
+            v   = list(vol_df[tk].reindex(cs.index).fillna(0).astype(float))
+            if len(c) < 60 or len(l) < 10 or len(hs) < 10 or len(v) < 20:
                 continue
-            p = c[-1]
-            slows = []
-            st = max(3, len(l) - 60)
-            for si in range(st, len(l) - 3):
-                if (all(l[si] <= l[si - k] for k in range(1, 4) if si - k >= 0)
-                        and all(l[si] <= l[si + k] for k in range(1, 4))):
-                    slows.append(l[si])
+            p    = c[-1]
+            avgv = sum(v[-20:]) / 20 if len(v) >= 20 else 0
+
             sm20  = sum(c[-20:]) / 20
             sm50  = sum(c[-min(50, len(c)):]) / min(50, len(c))
-            sm200 = sum(c[-200:]) / 200 if len(c) >= 200 else None
-            sups  = [s for s in slows if s <= p]
+            sm200 = sum(c[-200:]) / 200 if len(c) >= 200 else sum(c) / len(c)
+
+            # hard filter: above SMA200
+            if p <= sm200:
+                continue
+
+            # swing lows: 5-bar pivot, 90-bar lookback
+            slows = []
+            st = max(5, len(l) - 90)
+            for si in range(st, len(l) - 5):
+                if (all(l[si] <= l[si - k] for k in range(1, 6) if si - k >= 0)
+                        and all(l[si] <= l[si + k] for k in range(1, 6))):
+                    slows.append(l[si])
+
+            sups = [s for s in slows if s <= p]
             for sm in [sm20, sm50, sm200]:
                 if sm and sm <= p:
                     sups.append(sm)
             if not sups:
                 continue
+
             near = max(sups)
             gap  = (p - near) / near * 100
-            if not (0 <= gap <= 3.0):
+
+            # hard filter: within 2.5% of support
+            if not (0 <= gap <= 2.5):
                 continue
+
+            # hard filter: pullback 3–25% from 20D high
             hi20 = max(hs[-20:]) if len(hs) >= 20 else max(hs)
             pb   = (hi20 - p) / hi20 * 100
-            if pb < 4:
+            if not (3 <= pb <= 25):
                 continue
-            gains  = [max(c[i] - c[i-1], 0) for i in range(1, len(c))]
-            losses = [max(c[i-1] - c[i], 0) for i in range(1, len(c))]
-            if len(gains) >= 14:
-                ag = sum(gains[:14]) / 14
-                al = sum(losses[:14]) / 14
-                for gi, li_rsi in zip(gains[14:], losses[14:]):
+
+            # RSI (Wilder's)
+            g  = [max(c[i] - c[i-1], 0) for i in range(1, len(c))]
+            ls = [max(c[i-1] - c[i], 0) for i in range(1, len(c))]
+            if len(g) >= 14:
+                ag = sum(g[:14]) / 14
+                al = sum(ls[:14]) / 14
+                for gi, li_r in zip(g[14:], ls[14:]):
                     ag = (ag * 13 + gi) / 14
-                    al = (al * 13 + li_rsi) / 14
+                    al = (al * 13 + li_r) / 14
                 rsi = 100 - (100 / (1 + ag / max(al, 1e-10)))
             else:
                 rsi = 50.0
-            bounce = len(c) >= 3 and c[-1] > c[-2] and c[-2] > c[-3]
-            dayup  = c[-1] > c[-2]
-            avgv   = sum(v[-20:]) / 20 if len(v) >= 20 else 0
-            bvol   = bool(avgv and v[-1] > avgv * 1.5)
+
+            # 1. At support (gap ≤ 1.5%)
+            at_sup = gap <= 1.5
+
+            # 2. Prior uptrend
+            sma50_20ago = sum(c[-70:-20]) / 50 if len(c) >= 70 else None
+            prior_up = bool(sma50_20ago and sm50 >= sma50_20ago)
+
+            # 3. Confluence: 2+ sources within 1.5%
+            all_sups   = [s for s in [sm20, sm50, sm200] + slows if s and s <= p]
+            confluence = sum(1 for s in all_sups if abs(s - near) / near <= 0.015) >= 2
+
+            # 4. Proven support with recency weight (last 30 bars count double)
+            sup_touches, in_zone = 0, False
+            for idx, li in enumerate(l[-120:]):
+                at_sup_b = abs(li - near) / near <= 0.02
+                if at_sup_b and not in_zone:
+                    sup_touches += 2 if idx >= 90 else 1
+                in_zone = at_sup_b
+            proven_sup = sup_touches >= 2
+
+            # 5. Base forming: 5D range < 5%
+            base5_range  = (max(hs[-5:]) - min(l[-5:])) / p if len(hs) >= 5 else 1.0
+            base_forming = base5_range < 0.05
+
+            # 6. Vol condition: split into quiet and surge
+            vol5  = sum(v[-5:])  / 5  if len(v) >= 5  else avgv
+            vol10 = sum(v[-15:-5]) / 10 if len(v) >= 15 else avgv
+            vol_quiet = bool(vol10 > 0 and vol5 < vol10)
+            vol_surge = bool(avgv and v[-1] > avgv * 1.5 and c[-1] > c[-2])
+            vol_cond  = vol_quiet or vol_surge
+
+            # 7. RSI reset 35–70
+            rsi_reset = 35 <= rsi <= 70
+
+            # 8. Lows stable
+            lows_stable = bool(len(c) >= 5 and c[-1] >= c[-5])
+
+            # 9. Reversal candle
             lower_wick = (
-                len(l) >= 1 and
-                abs(l[-1] - near) / near <= 0.015 and
+                abs(l[-1] - near) / near <= 0.02 and
                 (c[-1] - l[-1]) / max(c[-1], 1) > 0.005
             )
-            all_sups = [s for s in [sm20, sm50, sm200] + slows if s and s <= p]
-            confluence = sum(1 for s in all_sups if abs(s - near) / near <= 0.015) >= 2
-            if sm200 and abs(near - sm200) / sm200 < 0.012:
-                stype = "SMA 200"
-            elif abs(near - sm50) / sm50 < 0.012:
-                stype = "SMA 50"
-            elif abs(near - sm20) / sm20 < 0.012:
-                stype = "SMA 20"
-            else:
-                stype = "Swing Low"
-            sma50_20ago    = sum(c[-70:-20]) / 50 if len(c) >= 70 else None
-            prior_up       = bool(sma50_20ago and sm50 >= sma50_20ago)
-            sup_touches, in_zone = 0, False
-            for li in l[-120:]:
-                at_sup = abs(li - near) / near <= 0.02
-                if at_sup and not in_zone:
-                    sup_touches += 1
-                in_zone = at_sup
-            score = sum([
-                gap <= 1.5, bounce or lower_wick, dayup and bvol,
-                25 <= rsi <= 58, 4 <= pb <= 20, pb >= 7,
-                prior_up, sup_touches >= 2, lower_wick, confluence,
-            ])
+            bounce  = len(c) >= 3 and c[-1] > c[-2] and c[-2] > c[-3]
+            reversal = lower_wick or bounce
+
+            # 10. Entry trigger
+            base_top = max(c[-6:-1]) if len(c) >= 6 else c[-2]
+            vol_exp  = bool(len(v) >= 2 and v[-1] > v[-2] and c[-1] > c[-2])
+            break_up = bool(c[-1] > base_top and avgv and v[-1] > avgv * 0.8)
+            entry    = vol_exp or break_up
+
+            score = sum([at_sup, prior_up, confluence, proven_sup,
+                         base_forming, vol_cond, rsi_reset,
+                         lows_stable, reversal, entry])
+
             if score >= 5:
-                buy_lo = round(near * 0.99, 2)
-                buy_hi = round(near * 1.02, 2)
-                stop   = round(near * 0.97, 2)
-                tgt    = round(hi20, 2)
-                rwd    = round((tgt - p) / p * 100, 1)
-                rsk    = round((p - stop) / p * 100, 1)
-                rr     = round(rwd / rsk, 1) if rsk > 0 else 0.0
+                buy_lo   = round(near * 0.99, 2)
+                buy_hi   = round(near * 1.02, 2)
+                stop     = round(near * 0.97, 2)
+                swing_hi = max(hs[-60:]) if len(hs) >= 60 else max(hs)
+                tgt      = round(max(swing_hi, p * 1.08), 2)
+                rwd      = round((tgt - p) / p * 100, 1)
+                rsk      = round((p - stop) / p * 100, 1)
+                rr       = round(rwd / rsk, 1) if rsk > 0 else 0.0
+
+                # hard filter: R:R ≥ 1.5
+                if rr < 1.5:
+                    continue
+
+                if sm200 and abs(near - sm200) / sm200 < 0.012:
+                    stype = "SMA 200"
+                elif abs(near - sm50) / sm50 < 0.012:
+                    stype = "SMA 50"
+                elif abs(near - sm20) / sm20 < 0.012:
+                    stype = "SMA 20"
+                else:
+                    stype = "Swing Low"
+
                 rows.append({
                     "Stock": nse, "Company": COMPANY_NAMES.get(nse, nse),
                     "Sector": SECTOR.get(nse, "Other"),
                     "Price (₹)": round(p, 2), "Support (₹)": round(near, 2),
-                    "Support Type": stype, "Sup. Touches": sup_touches,
+                    "Support Type": stype,
                     "Gap %": round(gap, 2), "Pullback %": round(pb, 1),
-                    "RSI": round(rsi, 1), "Prior Trend": "Yes" if prior_up else "No",
-                    "Bounce": "Yes" if bounce else ("Up" if dayup else "No"),
-                    "Lower Wick": "Yes" if lower_wick else "No",
-                    "Vol Surge": "Yes" if bvol else "No",
-                    "Confluence": "Yes" if confluence else "No",
+                    "RSI": round(rsi, 1),
+                    "Base Range %": round(base5_range * 100, 1),
+                    "Prior Trend": "Yes" if prior_up    else "No",
+                    "Confluence":  "Yes" if confluence  else "No",
+                    "Vol Quiet":   "Yes" if vol_quiet   else "No",
+                    "Vol Surge":   "Yes" if vol_surge   else "No",
+                    "Lows Stable": "Yes" if lows_stable else "No",
+                    "Reversal":    "Yes" if reversal    else "No",
+                    "Entry Trigger":"Yes" if entry      else "No",
                     "Buy Zone": f"₹{buy_lo}–{buy_hi}",
                     "Target (₹)": tgt, "Stop (₹)": stop,
-                    "Risk %": rsk, "R:R": rr, "Score /10": score,
+                    "R:R": rr, "Score /10": score,
                     "Chart": f"https://www.tradingview.com/chart/?symbol=NSE:{nse}",
                 })
         except Exception:
@@ -451,38 +543,65 @@ def run_consolidation(fno, close_df, high_df, vol_df):
             if len(c) < 35:
                 continue
             p = c[-1]
-            range10 = (max(c[-10:]) - min(c[-10:])) / p * 100
-            range30 = (max(c[-30:]) - min(c[-30:])) / p * 100
+            range10   = (max(c[-10:]) - min(c[-10:])) / p * 100
+            range30   = (max(c[-30:]) - min(c[-30:])) / p * 100
             sma50_pre = sum(c[-min(50, len(c)):]) / min(50, len(c))
-            if range10 > 5 or c[-1] <= sma50_pre:
+
+            # hard filter: range < 4% and above SMA50
+            if range10 > 4 or c[-1] <= sma50_pre:
                 continue
             range_contract = range10 < range30 * 0.50
+
+            # days in consolidation
             days_consol = 10
             for ext in range(11, min(60, len(c))):
                 r_ext = (max(c[-ext:]) - min(c[-ext:])) / p * 100
                 if r_ext > 6:
                     break
                 days_consol = ext
-            sma20    = sum(c[-20:]) / 20
-            std20    = (sum((x - sma20) ** 2 for x in c[-20:]) / 20) ** 0.5
-            bb_w     = 4 * std20 / sma20 * 100
-            sma20_p  = sum(c[-35:-15]) / 20
-            std20_p  = (sum((x - sma20_p) ** 2 for x in c[-35:-15]) / 20) ** 0.5
-            bb_w_p   = 4 * std20_p / sma20_p * 100
-            bb_sq    = bb_w < bb_w_p * 0.8
-            high20   = max(h[-20:]) if len(h) >= 20 else max(h)
-            near_hi  = p >= high20 * 0.95
+
+            # hard filter: min 15 days
+            if days_consol < 15:
+                continue
+
+            # prior move strength: ≥ 8% in 40D before consolidation
+            pre_start  = max(0, len(c) - days_consol - 1)
+            pre_40     = max(0, pre_start - 40)
+            prior_move = ((c[pre_start] - c[pre_40]) / c[pre_40] * 100
+                          if c[pre_40] > 0 else 0)
+            strong_move = prior_move >= 8.0
+
+            # vol pattern: high vol before → quiet now
+            pre_vol5   = (sum(v[max(0, pre_start - 5):pre_start]) / 5
+                          if pre_start >= 5 else 0)
+            avgv5_now  = sum(v[-5:]) / 5 if len(v) >= 5 else 0
+            vol_pattern = bool(pre_vol5 > 0 and avgv5_now > 0
+                               and pre_vol5 >= avgv5_now * 1.2)
+
+            # Bollinger Band squeeze
+            sma20   = sum(c[-20:]) / 20
+            std20   = (sum((x - sma20) ** 2 for x in c[-20:]) / 20) ** 0.5
+            bb_w    = 4 * std20 / sma20 * 100
+            sma20_p = sum(c[-35:-15]) / 20
+            std20_p = (sum((x - sma20_p) ** 2 for x in c[-35:-15]) / 20) ** 0.5
+            bb_w_p  = 4 * std20_p / sma20_p * 100
+            bb_sq   = bb_w < bb_w_p * 0.8
+
             avgv5    = sum(v[-5:])  / 5  if len(v) >= 5  else 0
             avgv20   = sum(v[-20:]) / 20 if len(v) >= 20 else 0
             vol_dry  = bool(avgv20 and avgv5 < avgv20 * 0.85)
             vol_ratio = round(avgv5 / avgv20, 2) if avgv20 else 1.0
+
             sma20_5d = sum(c[-25:-5]) / 20 if len(c) >= 25 else sma20
             sma_flat = abs(sma20 - sma20_5d) / sma20 < 0.012
-            above_sma20  = p > sma20
-            sm200_4      = sum(c[-200:]) / 200 if len(c) >= 200 else None
-            above_sma200 = bool(sm200_4 and p > sm200_4)
+
+            sm200        = sum(c[-200:]) / 200 if len(c) >= 200 else None
+            above_sma200 = bool(sm200 and p > sm200)
+
             sma50_20ago = sum(c[-70:-20]) / 50 if len(c) >= 70 else None
             prior_up    = bool(sma50_20ago and sma50_pre >= sma50_20ago)
+
+            # RSI (Wilder's)
             gains4  = [max(c[i] - c[i-1], 0) for i in range(1, len(c))]
             losses4 = [max(c[i-1] - c[i], 0) for i in range(1, len(c))]
             if len(gains4) >= 14:
@@ -495,19 +614,24 @@ def run_consolidation(fno, close_df, high_df, vol_df):
             else:
                 rsi4 = 50.0
             rsi_ok4 = 45 <= rsi4 <= 68
-            brk         = round(max(h[-days_consol:]) * 1.005, 2)
-            pct_to_brk  = round((brk - p) / p * 100, 2)
-            consol_lo   = min(c[-days_consol:])
-            consol_hi   = max(c[-days_consol:])
-            stop4       = round(consol_lo * 0.98, 2)
-            rsk4        = round((p - stop4) / p * 100, 1)
-            tgt4        = round(brk + (consol_hi - consol_lo), 2)
+
+            brk        = round(max(h[-days_consol:]) * 1.005, 2)
+            pct_to_brk = round((brk - p) / p * 100, 2)
+            near_brk   = pct_to_brk <= 1.5
+
+            consol_lo = min(c[-days_consol:])
+            consol_hi = max(c[-days_consol:])
+            stop4     = round(consol_lo * 0.98, 2)
+            rsk4      = round((p - stop4) / p * 100, 1)
+            tgt4      = round(brk + (consol_hi - consol_lo), 2)
+
             score = sum([
-                range10 < 3.5, range_contract, bb_sq, near_hi,
-                vol_dry, sma_flat, above_sma20, above_sma200,
+                strong_move, vol_pattern, range_contract, bb_sq,
+                near_brk, vol_dry, sma_flat, above_sma200,
                 prior_up, rsi_ok4,
             ])
-            if score >= 6:
+
+            if score >= 7:
                 rows.append({
                     "Stock": nse, "Company": COMPANY_NAMES.get(nse, nse),
                     "Sector": SECTOR.get(nse, "Other"),
@@ -517,11 +641,13 @@ def run_consolidation(fno, close_df, high_df, vol_df):
                     "Days Consol.": days_consol,
                     "10D Range %": round(range10, 2), "BB Width %": round(bb_w, 2),
                     "Vol Ratio": vol_ratio, "RSI": round(rsi4, 1),
-                    "SMA Flat": "Yes" if sma_flat else "No",
-                    "Near High": "Yes" if near_hi else "No",
-                    "BB Squeeze": "Yes" if bb_sq else "No",
+                    "SMA Flat":     "Yes" if sma_flat     else "No",
+                    "Prior Move":   "Yes" if strong_move  else "No",
+                    "Vol Pattern":  "Yes" if vol_pattern  else "No",
+                    "Near Breakout":"Yes" if near_brk     else "No",
+                    "BB Squeeze":   "Yes" if bb_sq        else "No",
                     "Above SMA200": "Yes" if above_sma200 else "No",
-                    "Prior Trend": "Yes" if prior_up else "No",
+                    "Prior Trend":  "Yes" if prior_up     else "No",
                     "Score /10": score,
                     "Chart": f"https://www.tradingview.com/chart/?symbol=NSE:{nse}",
                 })
@@ -777,7 +903,7 @@ if __name__ == "__main__":
     vol_df   = hist["Volume"]
     log("Download complete. Running screeners…")
 
-    df1 = run_probable_upside(FNO, close_df, vol_df)
+    df1 = run_probable_upside(FNO, close_df, vol_df, low_df)
     log(f"Probable Upside:        {len(df1)} candidates")
 
     df2 = run_support_entry(FNO, close_df, low_df, high_df, vol_df)

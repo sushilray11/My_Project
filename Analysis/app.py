@@ -307,6 +307,58 @@ _FNO_EXCLUDE = {
 }
 
 import json as _json, os as _os, datetime as _dt
+
+def _write_formatted_excel(path, sheets):
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    HDR_FILL = PatternFill("solid", fgColor="1D4ED8")
+    HDR_FONT = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL = PatternFill("solid", fgColor="EFF6FF")
+    POS_FILL = PatternFill("solid", fgColor="DCFCE7")
+    NEG_FILL = PatternFill("solid", fgColor="FEE2E2")
+    SCR_HI   = PatternFill("solid", fgColor="D1FAE5")
+    SCR_MED  = PatternFill("solid", fgColor="FEF9C3")
+    THIN     = Side(style="thin", color="E2E8F0")
+    BORDER   = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER   = Alignment(horizontal="center", vertical="center")
+    wb = Workbook()
+    wb.remove(wb.active)
+    for sheet_name, df in sheets.items():
+        ws = wb.create_sheet(title=sheet_name[:31])
+        if df.empty:
+            ws["A1"] = "No data"; continue
+        cols = list(df.columns)
+        for ci, col in enumerate(cols, 1):
+            c = ws.cell(row=1, column=ci, value=col)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.alignment = CENTER; c.border = BORDER
+        ws.row_dimensions[1].height = 24
+        ws.freeze_panes = "A2"
+        for ri, (_, row) in enumerate(df.iterrows(), 2):
+            for ci, col in enumerate(cols, 1):
+                val = row[col]
+                c = ws.cell(row=ri, column=ci, value=val)
+                c.border = BORDER; c.alignment = CENTER
+                if ri % 2 == 0:
+                    c.fill = ALT_FILL
+                if "%" in str(col) and col not in ("Score /10",):
+                    try:
+                        fv = float(val)
+                        c.fill = POS_FILL if fv > 0 else NEG_FILL
+                    except (TypeError, ValueError):
+                        pass
+                if col in ("Score /10", "Score"):
+                    try:
+                        sv = float(val)
+                        c.fill = SCR_HI if sv >= 8 else SCR_MED
+                        c.font = Font(bold=True, size=10)
+                    except (TypeError, ValueError):
+                        pass
+        for ci in range(1, len(cols) + 1):
+            ml = max((len(str(ws.cell(r, ci).value or "")) for r in range(1, ws.max_row + 1)), default=8)
+            ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
+    wb.save(path)
 _CACHE_FILE = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "fno_cache.json")
 
 def _load_fno_cache():
@@ -787,12 +839,12 @@ if st.session_state.get("support_requested"):
                 if _p3 <= _sm200_3:
                     continue
 
-                # ── Swing lows in last 60 bars ─────────────────────────────
+                # ── Swing lows in last 90 bars (5-bar pivot each side) ────
                 _slows3 = []
-                _st3 = max(3, len(_l3) - 60)
-                for _si in range(_st3, len(_l3) - 3):
-                    if (all(_l3[_si] <= _l3[_si - k] for k in range(1, 4) if _si - k >= 0)
-                            and all(_l3[_si] <= _l3[_si + k] for k in range(1, 4))):
+                _st3 = max(5, len(_l3) - 90)
+                for _si in range(_st3, len(_l3) - 5):
+                    if (all(_l3[_si] <= _l3[_si - k] for k in range(1, 6) if _si - k >= 0)
+                            and all(_l3[_si] <= _l3[_si + k] for k in range(1, 6))):
                         _slows3.append(_l3[_si])
 
                 # ── Support candidates at or below current price ───────────
@@ -806,8 +858,8 @@ if st.session_state.get("support_requested"):
                 _near3 = max(_sups3)   # closest support below price
                 _gap3  = (_p3 - _near3) / _near3 * 100
 
-                # hard filter: must be close to support
-                if not (0 <= _gap3 <= 4.0):
+                # hard filter: must be close to support (tightened to 2.5%)
+                if not (0 <= _gap3 <= 2.5):
                     continue
 
                 # Pullback from 20D high
@@ -842,12 +894,12 @@ if st.session_state.get("support_requested"):
                 _all_sups3   = [s for s in [_sm20_3, _sm50_3, _sm200_3] + _slows3 if s and s <= _p3]
                 _confluence3 = sum(1 for s in _all_sups3 if abs(s - _near3) / _near3 <= 0.015) >= 2
 
-                # 4. Support tested ≥ 2 times (proven level)
+                # 4. Support tested ≥ 2 times (proven level); touches in last 30 bars count double
                 _sup_touches, _in_zone = 0, False
-                for _li in _l3[-120:]:
+                for _idx3, _li in enumerate(_l3[-120:]):
                     _at_sup_b = abs(_li - _near3) / _near3 <= 0.02
                     if _at_sup_b and not _in_zone:
-                        _sup_touches += 1
+                        _sup_touches += 2 if _idx3 >= 90 else 1  # recent touch = double weight
                     _in_zone = _at_sup_b
                 _proven_sup = _sup_touches >= 2
 
@@ -855,14 +907,15 @@ if st.session_state.get("support_requested"):
                 _base5_range = (max(_h3s[-5:]) - min(_l3[-5:])) / _p3 if len(_h3s) >= 5 else 1.0
                 _base_forming = _base5_range < 0.05
 
-                # 6. Volume condition: quiet base (declining vol) OR reversal surge (vol > 1.5x avg + up close)
+                # 6. Volume condition: split into two sub-signals
                 _vol5  = sum(_v3[-5:])  / 5  if len(_v3) >= 5  else _avgv3
                 _vol10 = sum(_v3[-15:-5]) / 10 if len(_v3) >= 15 else _avgv3
-                _vol_surge3 = bool(_avgv3 and _v3[-1] > _avgv3 * 1.5 and _c3[-1] > _c3[-2])
-                _vol_declining = bool(_vol10 > 0 and _vol5 < _vol10) or _vol_surge3
+                _vol_quiet3 = bool(_vol10 > 0 and _vol5 < _vol10)   # sellers exhausting
+                _vol_surge3 = bool(_avgv3 and _v3[-1] > _avgv3 * 1.5 and _c3[-1] > _c3[-2])  # reversal surge
+                _vol_cond3  = _vol_quiet3 or _vol_surge3
 
                 # 7. RSI reset: cooled to neutral zone (not in freefall, not overbought)
-                _rsi_reset = 35 <= _rsi3 <= 65
+                _rsi_reset = 35 <= _rsi3 <= 70
 
                 # 8. Lows stabilizing: closes not making new lows (use close to avoid penalising hammer wicks)
                 _lows_stable = bool(len(_c3) >= 5 and _c3[-1] >= _c3[-5])
@@ -883,7 +936,7 @@ if st.session_state.get("support_requested"):
 
                 _sc3 = sum([
                     _at_sup3, _prior_uptrend_s, _confluence3, _proven_sup,
-                    _base_forming, _vol_declining, _rsi_reset,
+                    _base_forming, _vol_cond3, _rsi_reset,
                     _lows_stable, _reversal, _entry3,
                 ])
 
@@ -897,6 +950,10 @@ if st.session_state.get("support_requested"):
                     _rwd3     = round((_tgt3 - _p3) / _p3 * 100, 1)
                     _rsk3     = round((_p3 - _stop3) / _p3 * 100, 1)
                     _rr3      = round(_rwd3 / _rsk3, 1) if _rsk3 > 0 else 0.0
+
+                    # hard filter: R:R must be worthwhile
+                    if _rr3 < 1.5:
+                        continue
 
                     # Support type label
                     if _sm200_3 and abs(_near3 - _sm200_3) / _sm200_3 < 0.012:
@@ -920,7 +977,8 @@ if st.session_state.get("support_requested"):
                         "Base Range %":  round(_base5_range * 100, 1),
                         "Prior Trend":   "✅" if _prior_uptrend_s else "❌",
                         "Confluence":    "✅" if _confluence3     else "❌",
-                        "Vol Decline":   "✅" if _vol_declining   else "❌",
+                        "Vol Quiet":     "✅" if _vol_quiet3      else "❌",
+                        "Vol Surge":     "✅" if _vol_surge3      else "❌",
                         "Lows Stable":   "✅" if _lows_stable     else "❌",
                         "Reversal":      "✅" if _reversal        else "❌",
                         "Entry Trigger": "✅" if _entry3          else "❌",
@@ -969,7 +1027,8 @@ if st.session_state.get("support_requested"):
                 "Base Range %":   st.column_config.NumberColumn("Base Range 5D",  format="%.1f%%"),
                 "Prior Trend":    st.column_config.TextColumn("Prior Trend"),
                 "Confluence":     st.column_config.TextColumn("Confluence"),
-                "Vol Decline":    st.column_config.TextColumn("Vol Condition"),
+                "Vol Quiet":      st.column_config.TextColumn("Vol Quiet"),
+                "Vol Surge":      st.column_config.TextColumn("Vol Surge"),
                 "Lows Stable":    st.column_config.TextColumn("Lows Stable"),
                 "Reversal":       st.column_config.TextColumn("Reversal"),
                 "Entry Trigger":  st.column_config.TextColumn("Entry Trigger"),
@@ -989,14 +1048,17 @@ if st.session_state.get("support_requested"):
 | **At Support (gap ≤ 1.5%)** | Price sitting right on support — optimal entry zone |
 | **Prior Trend** | SMA50 now ≥ SMA50 from 20 days ago — pullback in an uptrend, not a breakdown |
 | **Confluence** | 2+ support sources (swing low + SMA) within 1.5% — significantly stronger level |
-| **Proven Support** | Level tested and held ≥ 2 times in past 120 days — not just theory |
+| **Proven Support** | Level tested and held ≥ 2 times in past 120 days; recent touches (last 30 bars) count double |
 | **Base Forming** | Last 5D price range < 5% — stock consolidating tightly, not falling |
-| **Vol Condition** | Volume declining in base (sellers exhausting) OR volume surge today (>1.5× avg) with up close (reversal confirmed) |
-| **RSI Reset (35–65)** | RSI cooled from overbought to neutral — healthy retracement |
-| **Lows Stable** | Recent close ≥ close 5 days ago — trend floor holding (uses closes, not intraday lows, to avoid penalising hammer wicks) |
+| **Vol Quiet** | 5-day avg volume below prior 10-day avg — sellers exhausting, base building |
+| **Vol Surge** | Today's volume > 1.5× 20D avg with up close — reversal confirmed by buyers |
+| **RSI Reset (35–70)** | RSI cooled to neutral — healthy retracement; upper bound raised to 70 to include strong-trend pullbacks |
+| **Lows Stable** | Recent close ≥ close 5 days ago — trend floor holding (uses closes to avoid penalising hammer wicks) |
 | **Reversal Candle** | Lower wick rejection at support OR 2 consecutive up-close days |
 | **Entry Trigger** | Volume expanding + up close today (early sign) OR price breaking above 5D base top with normal+ volume (strong confirmation) |
 
+**Hard filters:** Above SMA200 · Price within 2.5% of support · Pullback 3–25% from 20D high · R:R ≥ 1.5
+**Swing lows:** Identified using 5-bar pivot (more meaningful than 3-bar)
 **Target** = prior 60D swing high or +8% (whichever is higher) · **Stop** = 3% below support
 ⚠️ For informational purposes only — not financial advice
 """)
@@ -1054,9 +1116,9 @@ if st.session_state.get("consol_requested"):
                 _range10 = (max(_c4[-10:]) - min(_c4[-10:])) / _p4 * 100
                 _range30 = (max(_c4[-30:]) - min(_c4[-30:])) / _p4 * 100
 
-                # Hard filter: range must be tight (< 5%) and stock above SMA50
+                # Hard filter: range must be tight (< 4%) and stock above SMA50
                 _sma50_4_pre = sum(_c4[-min(50, len(_c4)):]) / min(50, len(_c4))
-                if _range10 > 5 or _c4[-1] <= _sma50_4_pre:
+                if _range10 > 4 or _c4[-1] <= _sma50_4_pre:
                     continue
                 # Range must be shrinking to less than half of 30D range
                 _range_contract = _range10 < _range30 * 0.50
@@ -1069,6 +1131,24 @@ if st.session_state.get("consol_requested"):
                         break
                     _days_consol = _ext
 
+                # Hard filter: base must be at least 15 days
+                if _days_consol < 15:
+                    continue
+
+                # ── Prior move strength: stock must have gained ≥ 8% in 40D before consolidation ──
+                _pre_start4  = max(0, len(_c4) - _days_consol - 1)
+                _pre_40_4    = max(0, _pre_start4 - 40)
+                _prior_move4 = ((_c4[_pre_start4] - _c4[_pre_40_4]) / _c4[_pre_40_4] * 100
+                                if _c4[_pre_40_4] > 0 else 0)
+                _strong_move4 = _prior_move4 >= 8.0
+
+                # ── Volume pattern: high before consolidation → quiet now ──
+                _pre_vol5_4  = (sum(_v4[max(0, _pre_start4 - 5):_pre_start4]) / 5
+                                if _pre_start4 >= 5 else 0)
+                _avgv5_now4  = sum(_v4[-5:]) / 5 if len(_v4) >= 5 else 0
+                _vol_pattern4 = bool(_pre_vol5_4 > 0 and _avgv5_now4 > 0
+                                     and _pre_vol5_4 >= _avgv5_now4 * 1.2)
+
                 # ── Bollinger Band squeeze ─────────────────────────────────
                 _sma20_4 = sum(_c4[-20:]) / 20
                 _std20   = (sum((x - _sma20_4) ** 2 for x in _c4[-20:]) / 20) ** 0.5
@@ -1080,9 +1160,8 @@ if st.session_state.get("consol_requested"):
                 _bb_w_p  = 4 * _std20_p / _sma20_p * 100
                 _bb_squeeze = _bb_w < _bb_w_p * 0.8  # current BB width < 80% of prior
 
-                # ── Position in range ──────────────────────────────────────
+                # ── Position in range — replaced by breakout imminence below ──
                 _high20_4 = max(_h4[-20:]) if len(_h4) >= 20 else max(_h4)
-                _near_hi4 = _p4 >= _high20_4 * 0.95  # near top of range
 
                 # ── Volume dry-up ──────────────────────────────────────────
                 _avgv5_4  = sum(_v4[-5:])  / 5  if len(_v4) >= 5  else 0
@@ -1122,6 +1201,9 @@ if st.session_state.get("consol_requested"):
                 _brk4       = round(max(_h4[-_days_consol:]) * 1.005, 2)
                 _pct_to_brk = round((_brk4 - _p4) / _p4 * 100, 2)
 
+                # ── Breakout imminence: price within 1.5% of breakout level ──
+                _near_brk4  = _pct_to_brk <= 1.5
+
                 # ── Stop and Target (measured move) ───────────────────────
                 _consol_lo4  = min(_c4[-_days_consol:])
                 _consol_hi4  = max(_c4[-_days_consol:])
@@ -1129,21 +1211,26 @@ if st.session_state.get("consol_requested"):
                 _rsk4        = round((_p4 - _stop4) / _p4 * 100, 1)
                 _tgt4        = round(_brk4 + (_consol_hi4 - _consol_lo4), 2)
 
+                # ── Entry Trigger ─────────────────────────────────────────
+                _vol_exp4  = bool(len(_v4) >= 2 and _v4[-1] > _v4[-2] and _c4[-1] > _c4[-2])
+                _break_up4 = bool(_c4[-1] > _brk4 and _avgv20_4 and _v4[-1] > _avgv20_4 * 0.8)
+                _entry4    = _vol_exp4 or _break_up4
+
                 # ── Score /10 ──────────────────────────────────────────────
                 _sc4 = sum([
-                    _range10 < 3.5,                 # very tight range (extra credit)
+                    _strong_move4,                   # prior move ≥ 8% before consolidation
+                    _vol_pattern4,                   # high vol before → quiet now
                     _range_contract,                 # range shrinking to < 50% of 30D range
                     _bb_squeeze,                     # Bollinger bands squeezing
-                    _near_hi4,                       # consolidating near top of range
+                    _near_brk4,                      # price within 1.5% of breakout level
                     _vol_dry,                        # volume declining = accumulation
                     _sma_flat,                       # SMA20 flat = sideways action
-                    _above_sma20,                    # price above SMA20
                     _above_sma200,                   # price above SMA200 = long-term uptrend
                     _prior_uptrend,                  # SMA50 was rising before consolidating
                     _rsi_ok4,                        # RSI 45-68: coiled, not extended
                 ])
 
-                if _sc4 >= 6:
+                if _sc4 >= 7:
                     _con_rows.append({
                         "Stock":        _nse4,
                         "Sector":       _SECTOR.get(_nse4, "Other"),
@@ -1159,10 +1246,13 @@ if st.session_state.get("consol_requested"):
                         "Vol Ratio":    _vol_ratio,
                         "RSI":          round(_rsi4, 1),
                         "SMA Flat":     "✅" if _sma_flat       else "❌",
-                        "Near High":    "✅" if _near_hi4       else "❌",
+                        "Prior Move":   "✅" if _strong_move4   else "❌",
+                        "Vol Pattern":  "✅" if _vol_pattern4   else "❌",
+                        "Near Breakout":"✅" if _near_brk4      else "❌",
                         "BB Squeeze":   "✅" if _bb_squeeze     else "❌",
                         "Above SMA200": "✅" if _above_sma200   else "❌",
                         "Prior Trend":  "✅" if _prior_uptrend  else "❌",
+                        "Entry Trigger":"✅" if _entry4         else "❌",
                         "Score /10":    _sc4,
                         "Chart":        f"https://www.tradingview.com/chart/?symbol=NSE:{_nse4}",
                     })
@@ -1208,10 +1298,13 @@ if st.session_state.get("consol_requested"):
                 "Vol Ratio":   st.column_config.NumberColumn("Vol Ratio",      format="%.2fx"),
                 "RSI":         st.column_config.NumberColumn("RSI",            format="%.1f"),
                 "SMA Flat":    st.column_config.TextColumn("SMA Flat"),
-                "Near High":   st.column_config.TextColumn("Near High"),
+                "Prior Move":  st.column_config.TextColumn("Prior Move ≥8%"),
+                "Vol Pattern": st.column_config.TextColumn("Vol Pattern"),
+                "Near Breakout":st.column_config.TextColumn("Near Breakout"),
                 "BB Squeeze":  st.column_config.TextColumn("BB Squeeze"),
                 "Above SMA200":st.column_config.TextColumn("Above SMA200"),
-                "Prior Trend": st.column_config.TextColumn("Prior Trend"),
+                "Prior Trend":  st.column_config.TextColumn("Prior Trend"),
+                "Entry Trigger":st.column_config.TextColumn("Entry Trigger"),
                 "Score /10":   st.column_config.NumberColumn("Score /10",      format="%d"),
                 "Chart":       st.column_config.LinkColumn("TradingView",      display_text="📈 Open Chart"),
             },
@@ -1221,23 +1314,23 @@ if st.session_state.get("consol_requested"):
             st.markdown("""
 | Signal | What it detects |
 |---|---|
-| **10D Range %** | Price range of last 10 days as % of price — lower = tighter coil (filter: must be < 5%) |
+| **Prior Move ≥8%** | Stock gained ≥ 8% in the 40 days before consolidation started — confirms real momentum, not random sideways |
+| **Vol Pattern** | Volume in 5 days before consolidation ≥ 1.2× current 5-day avg — classic high-vol move → quiet rest signature |
 | **Range Contraction** | 10-day range < 50% of 30-day range — the range is actively shrinking |
 | **BB Squeeze** | Current Bollinger Band width < 80% of its level 15 days ago — volatility compressing |
-| **Near High** | Price ≥ 95% of the 20-day high — consolidating at the top, not the bottom |
-| **Vol Ratio** | 5-day avg volume ÷ 20-day avg volume — below 0.85x = volume drying up (accumulation) |
+| **Near Breakout** | Price within 1.5% of breakout level — imminent, not just potential |
+| **Vol Dry-up** | 5-day avg volume < 85% of 20-day avg — sellers absent, accumulation underway |
 | **SMA Flat** | SMA20 moved < 1.2% over the past 5 days — confirms sideways / base-building action |
-| **Trend Intact** | Price above SMA20 — near-term trend still up |
-| **Above SMA200** | Price above SMA200 — long-term uptrend intact, not just a dead-cat bounce |
+| **Above SMA200** | Price above SMA200 — long-term uptrend intact, not a dead-cat bounce |
 | **Prior Uptrend** | SMA50 now ≥ SMA50 from 20 days ago — stock was rising before it started consolidating |
 | **RSI 45–68** | RSI in neutral-to-firm zone — coiled but not overbought |
 
-**Score /10** — how many of the 10 signals are true. Min 6 required to appear.
+**Hard filters:** 10D range < 4% · Min 15 days consolidation · Price above SMA50
+**Score /10** — min 7 required to appear (raised from 6 for higher conviction).
 **Sorted by:** Score (desc) → Days Consolidating (desc) → Range % (asc) — longest, tightest coils first.
 **Entry signal:** Watch for a close above **Breakout ₹** on above-average volume.
 **Target ₹** — measured move: breakout level + height of the consolidation range.
 **Stop ₹** — 2% below the lowest close of the consolidation period.
-**To Breakout %** — how far price needs to move to trigger; lower = closer to the edge.
 ⚠️ For informational purposes only — not financial advice.
 """)
     else:
@@ -1526,9 +1619,10 @@ if "analysis_bt_data" in st.session_state:
                 sub = combined[combined["Screener"] == screener]
                 if len(sub):
                     summary_rows.append(_stats(sub, screener))
-            with pd.ExcelWriter(bt_out, engine="openpyxl") as writer:
-                combined.to_excel(writer, sheet_name="Pick Results", index=False)
-                pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+            _write_formatted_excel(bt_out, {
+                "Pick Results": combined,
+                "Summary":      pd.DataFrame(summary_rows),
+            })
         except Exception:
             pass
         st.caption(f"📁 Saved to exports/backtest_results.xlsx ({len(combined)} total rows)")

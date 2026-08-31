@@ -66,17 +66,19 @@ div.block-container { padding-top: 0 !important; margin-top: 0 !important; }
 .content-wrap { padding: 0.6rem 2rem; }
 
 div[data-testid="metric-container"] {
-    background: white; border-radius: 10px;
-    padding: 1rem 1.2rem !important;
+    background: white; border-radius: 8px;
+    padding: 0.4rem 0.8rem !important;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border-left: 4px solid #10b981;
+    border-left: 3px solid #10b981;
 }
-div[data-testid="metric-container"] label {
-    color: #64748b !important; font-size: 0.72rem !important;
+div[data-testid="metric-container"] label,
+div[data-testid="metric-container"] [data-testid="stMetricLabel"] p {
+    color: #64748b !important; font-size: 0.68rem !important;
     text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500 !important;
 }
-div[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: #0f172a !important; font-size: 1.4rem !important; font-weight: 700 !important;
+div[data-testid="metric-container"] [data-testid="stMetricValue"],
+div[data-testid="metric-container"] [data-testid="stMetricValue"] > div {
+    color: #0f172a !important; font-size: 0.9rem !important; font-weight: 700 !important; line-height: 1.3 !important;
 }
 
 .section-header {
@@ -275,6 +277,58 @@ def _get_mcap(sym_ns, mcap_data):
     return mc
 
 # ── History export helper ──────────────────────────────────────────────────────
+def _write_formatted_excel(path, sheets):
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    HDR_FILL  = PatternFill("solid", fgColor="1D4ED8")
+    HDR_FONT  = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL  = PatternFill("solid", fgColor="EFF6FF")
+    POS_FILL  = PatternFill("solid", fgColor="DCFCE7")
+    NEG_FILL  = PatternFill("solid", fgColor="FEE2E2")
+    SCR_HI    = PatternFill("solid", fgColor="D1FAE5")
+    SCR_MED   = PatternFill("solid", fgColor="FEF9C3")
+    THIN      = Side(style="thin", color="E2E8F0")
+    BORDER    = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER    = Alignment(horizontal="center", vertical="center")
+    wb = Workbook()
+    wb.remove(wb.active)
+    for sheet_name, df in sheets.items():
+        ws = wb.create_sheet(title=sheet_name[:31])
+        if df.empty:
+            ws["A1"] = "No data"; continue
+        cols = list(df.columns)
+        for ci, col in enumerate(cols, 1):
+            c = ws.cell(row=1, column=ci, value=col)
+            c.fill = HDR_FILL; c.font = HDR_FONT
+            c.alignment = CENTER; c.border = BORDER
+        ws.row_dimensions[1].height = 24
+        ws.freeze_panes = "A2"
+        for ri, (_, row) in enumerate(df.iterrows(), 2):
+            for ci, col in enumerate(cols, 1):
+                val = row[col]
+                c = ws.cell(row=ri, column=ci, value=val)
+                c.border = BORDER; c.alignment = CENTER
+                if ri % 2 == 0:
+                    c.fill = ALT_FILL
+                if "%" in str(col) and col not in ("Score /10",):
+                    try:
+                        fv = float(val)
+                        c.fill = POS_FILL if fv > 0 else NEG_FILL
+                    except (TypeError, ValueError):
+                        pass
+                if col in ("Score /10", "Score"):
+                    try:
+                        sv = float(val)
+                        c.fill = SCR_HI if sv >= 8 else SCR_MED
+                        c.font = Font(bold=True, size=10)
+                    except (TypeError, ValueError):
+                        pass
+        for ci, col in enumerate(cols, 1):
+            ml = max((len(str(ws.cell(r, ci).value or "")) for r in range(1, ws.max_row + 1)), default=8)
+            ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
+    wb.save(path)
+
 def _save_history(rows, top_n=20):
     if not rows:
         return
@@ -300,9 +354,9 @@ def _save_history(rows, top_n=20):
     else:
         combined = df_new.astype(str)
     try:
-        combined.to_excel(hist_path, index=False)
+        _write_formatted_excel(hist_path, {"History": combined})
     except Exception:
-        pass
+        combined.to_excel(hist_path, index=False)
 
 # ── Main UI ────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -521,10 +575,15 @@ with tab1:
             strong   = (df["Score /10"] >= 8).sum()
 
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Universe",          f"{u_count:,} stocks")
-            c2.metric("Above 200 EMA",     f"{e_count:,} stocks")
-            c3.metric("Mkt Cap ≥ 1000 Cr", f"{mc_count:,} stocks")
-            c4.metric("High Conviction",   f"{strong} setups (≥ 8/10)")
+            for col, label, val in [
+                (c1, "Universe",          f"{u_count:,} stocks"),
+                (c2, "Above 200 EMA",     f"{e_count:,} stocks"),
+                (c3, "Mkt Cap ≥ 1000 Cr", f"{mc_count:,} stocks"),
+                (c4, "High Conviction",   f"{strong} setups (≥ 8/10)"),
+            ]:
+                col.markdown(f"""<div style="background:white;border-left:3px solid #10b981;border-radius:7px;padding:6px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.07);">
+<div style="font-size:0.72rem;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">{label}</div>
+<div style="font-size:1.0rem;font-weight:700;color:#0f172a;margin-top:2px;">{val}</div></div>""", unsafe_allow_html=True)
 
             st.markdown(
                 f"**{len(df)} top setups** from {mc_count} qualifying stocks  •  "
@@ -703,12 +762,17 @@ with tab2:
 
         st.markdown("#### Summary")
         m1, m2, m3, m4, m5, m6 = st.columns(6)
-        m1.metric("Total Picks",    len(bt_df))
-        m2.metric("Dates Covered",  bt_df["Date"].nunique())
-        m3.metric("Hit Rate 1D",    _hr(bt_df["D+1 %"]))
-        m4.metric("Hit Rate 3D",    _hr(bt_df["D+3 %"]))
-        m5.metric("Hit Rate 5D",    _hr(bt_df["D+5 %"]))
-        m6.metric("Avg Return 5D",  _avg(bt_df["D+5 %"]))
+        for col, label, val in [
+            (m1, "Total Picks",   len(bt_df)),
+            (m2, "Dates Covered", bt_df["Date"].nunique()),
+            (m3, "Hit Rate 1D",   _hr(bt_df["D+1 %"])),
+            (m4, "Hit Rate 3D",   _hr(bt_df["D+3 %"])),
+            (m5, "Hit Rate 5D",   _hr(bt_df["D+5 %"])),
+            (m6, "Avg Return 5D", _avg(bt_df["D+5 %"])),
+        ]:
+            col.markdown(f"""<div style="background:white;border-left:3px solid #10b981;border-radius:7px;padding:6px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.07);">
+<div style="font-size:0.72rem;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">{label}</div>
+<div style="font-size:1.0rem;font-weight:700;color:#0f172a;margin-top:2px;">{val}</div></div>""", unsafe_allow_html=True)
 
         hi = bt_df[bt_df["Score"] >= 8]
         lo = bt_df[bt_df["Score"] <  8]
@@ -807,9 +871,10 @@ with tab2:
             if len(hi_c): summary_rows.append(_stats(hi_c, "Score ≥ 8"))
             if len(lo_c): summary_rows.append(_stats(lo_c, "Score 5–7"))
 
-            with pd.ExcelWriter(bt_path, engine="openpyxl") as writer:
-                combined_bt.to_excel(writer, sheet_name="Pick Results", index=False)
-                pd.DataFrame(summary_rows).to_excel(writer, sheet_name="Summary", index=False)
+            _write_formatted_excel(bt_path, {
+                "Pick Results": combined_bt,
+                "Summary":      pd.DataFrame(summary_rows),
+            })
         except Exception:
             pass
 
