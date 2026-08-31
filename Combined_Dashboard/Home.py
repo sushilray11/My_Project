@@ -5,7 +5,7 @@ st.set_page_config(page_title="NSE Trading Dashboard", page_icon="📈", layout=
 st.title("📈 NSE Trading Dashboard")
 st.markdown("---")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("""
@@ -30,16 +30,6 @@ with col2:
     - Backtest (last 10 dates)
 
     👈 Click **Project Up** in the sidebar
-    """)
-
-with col3:
-    st.markdown("""
-    ### 🏠 My Dashboard
-    **Personal Dashboard**
-    - Portfolio & watchlist tracking
-    - Custom views and metrics
-
-    👈 Click **My Dashboard** in the sidebar
     """)
 
 st.markdown("---")
