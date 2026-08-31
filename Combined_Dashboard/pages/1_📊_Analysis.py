@@ -1,6 +1,6 @@
 import os, sys
 
-_DIR = "/Users/I325211/Local_Project/Analysis"
+_DIR = "D:\My_Project\Analysis"
 _app_path = os.path.join(_DIR, "app.py")
 if _DIR not in sys.path:
     sys.path.insert(0, _DIR)
