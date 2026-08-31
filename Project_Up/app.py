@@ -154,14 +154,14 @@ _MCAP_CACHE     = _os.path.join(_DIR, "mcap_cache.json")
 
 def _load_json(path):
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return _json.load(f)
     except Exception:
         return {}
 
 def _save_json(path, data):
     try:
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             _json.dump(data, f)
     except Exception:
         pass

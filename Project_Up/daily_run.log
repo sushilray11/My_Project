@@ -1,0 +1,47 @@
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] Project Up — daily screener starting
+[15:00:05] Universe: 2559 stocks (cache)
+[15:00:05] Downloading 2559 tickers in 7 batches…
+[15:00:05]   Batch 1/7 (400 stocks)
+[15:00:25]   Batch 2/7 (400 stocks)
+[15:00:42]   Batch 3/7 (400 stocks)
+[15:00:59]   Batch 4/7 (400 stocks)
+[15:01:15]   Batch 5/7 (400 stocks)
+[15:01:32]   Batch 6/7 (400 stocks)
+[15:01:52]   Batch 7/7 (159 stocks)
+[15:01:59] 200 EMA filter: 1056 pass
+[15:01:59]   Mcap check 100/1056: 70 qualifying
+[15:02:01]   Mcap check 200/1056: 151 qualifying
+[15:02:01]   Mcap check 300/1056: 226 qualifying
+[15:02:04]   Mcap check 400/1056: 303 qualifying
+[15:02:04]   Mcap check 500/1056: 380 qualifying
+[15:02:06]   Mcap check 600/1056: 448 qualifying
+[15:02:06]   Mcap check 700/1056: 513 qualifying
+[15:02:06]   Mcap check 800/1056: 588 qualifying
+[15:02:06]   Mcap check 900/1056: 657 qualifying
+[15:02:07]   Mcap check 1000/1056: 730 qualifying
+[15:02:08] Mkt Cap filter: 772 pass
+[15:02:08] Scoring complete: 348 stocks qualify (score ≥ 5)
+[15:02:09] Saved 20 rows to history.xlsx
+[15:02:09] Top 20 picks:
+[15:02:09]    1. ETHOSLTD      Score 9/10  Vol 0.3x  Price ₹2898.8
+[15:02:09]    2. KAMDHENU      Score 8/10  Vol 0.7x  Price ₹35.58
+[15:02:09]    3. ZYDUSLIFE     Score 8/10  Vol 0.6x  Price ₹1162.9
+[15:02:09]    4. BOSCHLTD      Score 8/10  Vol 0.6x  Price ₹48835.0
+[15:02:09]    5. CEIGALL       Score 8/10  Vol 0.6x  Price ₹341.25
+[15:02:09]    6. NAVINFLUOR    Score 8/10  Vol 0.5x  Price ₹8693.5
+[15:02:09]    7. NH            Score 8/10  Vol 0.5x  Price ₹1907.7
+[15:02:09]    8. MOTILALOFS    Score 8/10  Vol 0.4x  Price ₹1036.95
+[15:02:09]    9. IPCALAB       Score 8/10  Vol 0.4x  Price ₹1978.1
+[15:02:09]   10. AURUM         Score 8/10  Vol 0.4x  Price ₹232.22
+[15:02:09]   11. ANURAS        Score 8/10  Vol 0.3x  Price ₹1260.1
+[15:02:09]   12. TITAN         Score 8/10  Vol 0.3x  Price ₹5130.9
+[15:02:09]   13. EMUDHRA       Score 8/10  Vol 0.2x  Price ₹549.25
+[15:02:09]   14. GRPLTD        Score 8/10  Vol 0.1x  Price ₹1987.1
+[15:02:09]   15. AUROPHARMA    Score 7/10  Vol 1.8x  Price ₹1684.4
+[15:02:09]   16. BAJAJ-AUTO    Score 7/10  Vol 1.2x  Price ₹11991.0
+[15:02:09]   17. ABSLAMC       Score 7/10  Vol 1.1x  Price ₹1052.5
+[15:02:09]   18. BEL           Score 7/10  Vol 0.9x  Price ₹413.45
+[15:02:09]   19. AXISBANK      Score 7/10  Vol 0.8x  Price ₹1265.7
+[15:02:09]   20. SUNPHARMA     Score 7/10  Vol 0.8x  Price ₹1928.5

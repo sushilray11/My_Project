@@ -111,7 +111,7 @@ CACHE_FILE = os.path.join(SCRIPT_DIR, "fno_cache.json")
 
 def _load_fno_cache():
     try:
-        with open(CACHE_FILE) as f:
+        with open(CACHE_FILE, encoding="utf-8") as f:
             c = json.load(f)
         syms  = c.get("symbols", [])
         names = c.get("names", {})
@@ -124,7 +124,7 @@ def _load_fno_cache():
 
 def _save_fno_cache(symbols, names):
     try:
-        with open(CACHE_FILE, "w") as f:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump({"updated": str(datetime.date.today()), "symbols": symbols, "names": names}, f)
     except Exception:
         pass
