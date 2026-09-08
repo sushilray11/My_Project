@@ -45,3 +45,47 @@
 [15:02:09]   18. BEL           Score 7/10  Vol 0.9x  Price ₹413.45
 [15:02:09]   19. AXISBANK      Score 7/10  Vol 0.8x  Price ₹1265.7
 [15:02:09]   20. SUNPHARMA     Score 7/10  Vol 0.8x  Price ₹1928.5
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:04] Project Up — daily screener starting
+[15:00:04] Universe: 2570 stocks (cache)
+[15:00:04] Downloading 2570 tickers in 7 batches…
+[15:00:04]   Batch 1/7 (400 stocks)
+[15:00:24]   Batch 2/7 (400 stocks)
+[15:00:41]   Batch 3/7 (400 stocks)
+[15:01:02]   Batch 4/7 (400 stocks)
+[15:01:28]   Batch 5/7 (400 stocks)
+[15:01:53]   Batch 6/7 (400 stocks)
+[15:02:15]   Batch 7/7 (170 stocks)
+[15:02:24] 200 EMA filter: 1041 pass
+[15:02:28]   Mcap check 100/1041: 65 qualifying
+[15:02:31]   Mcap check 200/1041: 139 qualifying
+[15:02:32]   Mcap check 300/1041: 214 qualifying
+[15:02:35]   Mcap check 400/1041: 289 qualifying
+$KALYANI.NS: possibly delisted; no price data found  (period=5d)
+[15:02:39]   Mcap check 500/1041: 358 qualifying
+[15:02:41]   Mcap check 600/1041: 424 qualifying
+[15:02:45]   Mcap check 700/1041: 487 qualifying
+[15:02:51]   Mcap check 800/1041: 561 qualifying
+[15:02:58]   Mcap check 900/1041: 625 qualifying
+[15:03:02]   Mcap check 1000/1041: 698 qualifying
+[15:03:05] Mkt Cap filter: 730 pass
+[15:03:05] Scoring complete: 99 stocks qualify (score ≥ 5)
+[15:03:05] Saved 15 rows to history.xlsx (sheet: 2026-09-07, 5 dates stored)
+[15:03:05] Top 15 picks:
+[15:03:05]    1. SAGILITY      Score 8/10  Vol 0.3x  Price ₹46.0
+[15:03:05]    2. KPIL          Score 8/10  Vol 0.2x  Price ₹1423.4
+[15:03:05]    3. IPCALAB       Score 8/10  Vol 0.1x  Price ₹1958.0
+[15:03:05]    4. GAIL          Score 7/10  Vol 1.1x  Price ₹175.21
+[15:03:05]    5. PETRONET      Score 7/10  Vol 0.7x  Price ₹290.45
+[15:03:05]    6. LINCOLN       Score 7/10  Vol 0.6x  Price ₹629.6
+[15:03:05]    7. BEPL          Score 7/10  Vol 0.6x  Price ₹126.89
+[15:03:05]    8. AUROPHARMA    Score 7/10  Vol 0.6x  Price ₹1656.7
+[15:03:05]    9. MUKANDLTD     Score 7/10  Vol 0.6x  Price ₹137.36
+[15:03:05]   10. GOODLUCK      Score 7/10  Vol 0.6x  Price ₹480.55
+[15:03:05]   11. HARSHA        Score 7/10  Vol 0.6x  Price ₹455.55
+[15:03:05]   12. NORTHARC      Score 7/10  Vol 0.6x  Price ₹305.75
+[15:03:05]   13. NPST          Score 7/10  Vol 0.5x  Price ₹1730.5
+[15:03:05]   14. NAVINFLUOR    Score 7/10  Vol 0.5x  Price ₹8604.5
+[15:03:05]   15. VADILALIND    Score 7/10  Vol 0.5x  Price ₹7547.5
+[15:03:06] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (2 dates stored)

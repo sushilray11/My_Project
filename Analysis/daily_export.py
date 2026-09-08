@@ -18,10 +18,10 @@ SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 EXPORTS_DIR = os.path.join(SCRIPT_DIR, "exports")
 os.makedirs(EXPORTS_DIR, exist_ok=True)
 
-TODAY     = datetime.date.today().strftime("%Y-%m-%d")
-NOW       = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-OUTFILE   = os.path.join(EXPORTS_DIR, f"screener_{TODAY}.xlsx")
-HIST_FILE = os.path.join(EXPORTS_DIR, "consolidated_history.xlsx")
+TODAY       = datetime.date.today().strftime("%Y-%m-%d")
+NOW         = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+MASTER_FILE = os.path.join(EXPORTS_DIR, "screener_master.xlsx")
+HIST_FILE   = os.path.join(EXPORTS_DIR, "consolidated_history.xlsx")
 
 # exit on weekends — no trading, no files
 if datetime.date.today().weekday() >= 5:
@@ -660,96 +660,114 @@ def run_consolidation(fno, close_df, high_df, vol_df):
     df.index += 1
     return df
 
-# ── Excel export with formatting ──────────────────────────────────────────────
-def write_excel(sheets_data):
-    from openpyxl import Workbook
+# ── Master Excel: one file, one tab per date, three groups side-by-side ────────
+def write_master_excel(sheets_data: dict, date_str: str):
+    from openpyxl import Workbook, load_workbook
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
-    HEADER_FILL  = PatternFill("solid", fgColor="1D4ED8")
-    HEADER_FONT  = Font(color="FFFFFF", bold=True, size=10)
-    GREEN_FILL   = PatternFill("solid", fgColor="D1FAE5")
-    YELLOW_FILL  = PatternFill("solid", fgColor="FEF9C3")
-    ALT_FILL     = PatternFill("solid", fgColor="F8FAFC")
-    THIN         = Side(style="thin", color="E2E8F0")
-    CELL_BORDER  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-    SCORE_COLS   = {"Score /11", "Score /10", "Score /9", "Score /8", "Score /6"}
+    # Load existing master file or start fresh
+    if os.path.exists(MASTER_FILE):
+        try:
+            wb = load_workbook(MASTER_FILE)
+        except Exception:
+            wb = Workbook()
+            if wb.active:
+                wb.remove(wb.active)
+    else:
+        wb = Workbook()
+        if wb.active:
+            wb.remove(wb.active)
 
-    wb = Workbook()
-    wb.remove(wb.active)  # remove default sheet
+    # Replace today's sheet if re-running
+    if date_str in wb.sheetnames:
+        del wb[date_str]
 
-    tab_colors = {"Probable Upside": "3B82F6", "Support Entry": "10B981",
-                  "Consolidation Breakout": "8B5CF6"}
+    # New sheet at the front (most-recent tab comes first)
+    ws = wb.create_sheet(title=date_str, index=0)
 
-    for sheet_name, df in sheets_data.items():
-        ws = wb.create_sheet(title=sheet_name[:31])
-        ws.sheet_properties.tabColor = tab_colors.get(sheet_name, "3B82F6")
+    # Styles
+    TITLE_FILLS = {
+        "Probable Upside":        PatternFill("solid", fgColor="1D4ED8"),
+        "Support Entry":          PatternFill("solid", fgColor="059669"),
+        "Consolidation Breakout": PatternFill("solid", fgColor="7C3AED"),
+    }
+    HEADER_FILL = PatternFill("solid", fgColor="334155")
+    HEADER_FONT = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL    = PatternFill("solid", fgColor="F0F4FF")
+    GREEN_FILL  = PatternFill("solid", fgColor="D1FAE5")
+    YELLOW_FILL = PatternFill("solid", fgColor="FEF9C3")
+    THIN        = Side(style="thin", color="CBD5E1")
+    CELL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER      = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    SCORE_COLS  = {"Score /10", "Score /11", "Score /9", "Score /8", "Score /6"}
+    GAP         = 2   # blank rows between groups
+
+    row_start = 1
+    for group_name, df in sheets_data.items():
+        title_fill  = TITLE_FILLS.get(group_name, PatternFill("solid", fgColor="1D4ED8"))
+        cols        = list(df.columns) if not df.empty else []
+        ncols       = max(len(cols), 1)
+
+        # Title row spanning all data columns
+        title_cell = ws.cell(row=row_start, column=1, value=group_name.upper())
+        title_cell.fill      = title_fill
+        title_cell.font      = Font(color="FFFFFF", bold=True, size=12)
+        title_cell.alignment = CENTER
+        title_cell.border    = CELL_BORDER
+        if ncols > 1:
+            ws.merge_cells(
+                start_row=row_start, start_column=1,
+                end_row=row_start,   end_column=ncols,
+            )
+        ws.row_dimensions[row_start].height = 22
 
         if df.empty:
-            ws["A1"] = "No results found for this screener."
+            ws.cell(row=row_start + 1, column=1, value="No results found.")
+            row_start += 1 + GAP
             continue
 
-        cols = list(df.columns)
-
-        # Header row
-        for ci, col in enumerate(cols, start=1):
-            cell = ws.cell(row=1, column=ci, value=col)
-            cell.fill   = HEADER_FILL
-            cell.font   = HEADER_FONT
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.border = CELL_BORDER
-
-        ws.row_dimensions[1].height = 28
+        # Column headers row
+        hdr_row = row_start + 1
+        for ci, col in enumerate(cols):
+            cell           = ws.cell(row=hdr_row, column=ci + 1, value=col)
+            cell.fill      = HEADER_FILL
+            cell.font      = HEADER_FONT
+            cell.alignment = CENTER
+            cell.border    = CELL_BORDER
+        ws.row_dimensions[hdr_row].height = 28
 
         # Data rows
-        score_col_idx = next((ci + 1 for ci, c in enumerate(cols) if c in SCORE_COLS), None)
-        max_score = df[next((c for c in cols if c in SCORE_COLS), cols[-1])].max() if score_col_idx else 0
+        score_local = next((i for i, c in enumerate(cols) if c in SCORE_COLS), None)
+        max_score   = df[cols[score_local]].max() if score_local is not None else 0
 
-        for ri, (_, row) in enumerate(df.iterrows(), start=2):
-            row_fill = ALT_FILL if ri % 2 == 0 else None
-            for ci, col in enumerate(cols, start=1):
-                val  = row[col]
-                cell = ws.cell(row=ri, column=ci, value=val)
-                cell.border = CELL_BORDER
-                cell.alignment = Alignment(horizontal="center", vertical="center")
+        for di, (_, row) in enumerate(df.iterrows()):
+            ri       = hdr_row + 1 + di
+            row_fill = ALT_FILL if di % 2 == 1 else None
+            for ci, col in enumerate(cols):
+                val            = row[col]
+                cell           = ws.cell(row=ri, column=ci + 1, value=val)
+                cell.border    = CELL_BORDER
+                cell.alignment = CENTER
                 if row_fill:
                     cell.fill = row_fill
-                # Color score column
-                if score_col_idx and ci == score_col_idx and isinstance(val, (int, float)):
+                if score_local is not None and ci == score_local and isinstance(val, (int, float)):
                     cell.fill = GREEN_FILL if val >= max_score - 1 else YELLOW_FILL
                     cell.font = Font(bold=True, size=10)
 
-        # Auto column width
-        for ci, col in enumerate(cols, start=1):
-            max_len = len(str(col))
-            for ri in range(2, ws.max_row + 1):
-                v = ws.cell(row=ri, column=ci).value
-                max_len = max(max_len, len(str(v)) if v is not None else 0)
-            ws.column_dimensions[get_column_letter(ci)].width = min(max_len + 3, 30)
+        row_start = hdr_row + 1 + len(df) + GAP
 
-        ws.freeze_panes = "A2"
+    # Auto column widths (scan all rows)
+    for ci in range(1, ws.max_column + 1):
+        max_len = 0
+        for ri in range(1, ws.max_row + 1):
+            v = ws.cell(row=ri, column=ci).value
+            max_len = max(max_len, len(str(v)) if v is not None else 0)
+        ws.column_dimensions[get_column_letter(ci)].width = min(max_len + 3, 30)
 
-    # Summary sheet
-    ws_sum = wb.create_sheet(title="Summary", index=0)
-    ws_sum.sheet_properties.tabColor = "0F172A"
-    summary_rows = [
-        ["NSE F&O Screener — Daily Export"],
-        ["Generated", NOW],
-        [""],
-    ]
-    for name, df in sheets_data.items():
-        summary_rows.append([name, f"{len(df)} stocks found"])
-    for ri, row in enumerate(summary_rows, start=1):
-        for ci, val in enumerate(row, start=1):
-            cell = ws_sum.cell(row=ri, column=ci, value=val)
-            if ri == 1:
-                cell.font = Font(bold=True, size=13, color="1D4ED8")
-            elif ri >= 4:
-                cell.font = Font(size=10)
-    ws_sum.column_dimensions["A"].width = 30
-    ws_sum.column_dimensions["B"].width = 20
+    ws.freeze_panes = "A3"
 
-    wb.save(OUTFILE)
+    wb.save(MASTER_FILE)
 
 # ── Consolidated history ──────────────────────────────────────────────────────
 def update_consolidated_history(results: dict):
@@ -912,12 +930,12 @@ if __name__ == "__main__":
     df3 = run_consolidation(FNO, close_df, high_df, vol_df)
     log(f"Consolidation Breakout: {len(df3)} candidates")
 
-    write_excel({
+    write_master_excel({
         "Probable Upside":        df1,
         "Support Entry":          df2,
         "Consolidation Breakout": df3,
-    })
-    log(f"Saved → {OUTFILE}")
+    }, TODAY)
+    log(f"Saved → {MASTER_FILE}  (tab: {TODAY})")
 
     update_consolidated_history({
         "Probable Upside":        df1,
@@ -926,27 +944,12 @@ if __name__ == "__main__":
     })
     log(f"History updated → {HIST_FILE}")
 
-    # Cleanup: delete Excel files older than 20 days
-    cutoff = datetime.date.today() - datetime.timedelta(days=20)
-    deleted = []
-    for fname in os.listdir(EXPORTS_DIR):
-        if not fname.startswith("screener_") or not fname.endswith(".xlsx"):
-            continue
-        try:
-            file_date = datetime.date.fromisoformat(fname[9:19])  # screener_YYYY-MM-DD.xlsx
-            if file_date < cutoff:
-                os.remove(os.path.join(EXPORTS_DIR, fname))
-                deleted.append(fname)
-        except Exception:
-            pass
-    if deleted:
-        log(f"Deleted {len(deleted)} old file(s): {', '.join(deleted)}")
-
     # Cross-platform notification
     try:
         import platform, subprocess
         msg = (f"Screener export complete — "
-               f"{len(df1)} upside, {len(df2)} support, {len(df3)} consolidation setups.")
+               f"{len(df1)} upside, {len(df2)} support, {len(df3)} consolidation setups. "
+               f"Tab '{TODAY}' added to screener_master.xlsx.")
         system = platform.system()
         if system == "Darwin":
             subprocess.run([
