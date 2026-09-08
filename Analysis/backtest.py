@@ -1,7 +1,7 @@
 """
 Standalone backtest for Analysis project picks.
 Reads consolidated_history.xlsx (last 7 trading dates, all 3 screeners),
-downloads 3-month price data, calculates D+1/D+3/D+5 forward returns,
+downloads 3-month price data, calculates D+1/D+3/D+5/D+7 forward returns,
 prints summary to console, and appends new dates to backtest_results.xlsx.
 """
 import os, sys, datetime
@@ -79,7 +79,7 @@ def _avg(series):
 
 def _stats(df, label):
     r = {"Group": label, "Picks": len(df)}
-    for h, col in [("1D", "D+1 %"), ("3D", "D+3 %"), ("5D", "D+5 %")]:
+    for h, col in [("1D", "D+1 %"), ("3D", "D+3 %"), ("5D", "D+5 %"), ("7D", "D+7 %")]:
         v = df[col].dropna()
         r[f"Hit Rate {h}"]   = f"{(v > 0).mean()*100:.1f}%" if len(v) else "N/A"
         r[f"Avg Return {h}"] = f"{v.mean():.2f}%"           if len(v) else "N/A"
@@ -116,7 +116,7 @@ def run():
                     valid_dates.append(str(d))
             except Exception:
                 pass
-        last7 = sorted(set(valid_dates))[-7:]
+        last7 = sorted(set(valid_dates))[-15:]
 
         for ci, h in enumerate(headers):
             if not h:
@@ -204,6 +204,7 @@ def run():
         p1, r1 = _fwd(1)
         p3, r3 = _fwd(3)
         p5, r5 = _fwd(5)
+        p7, r7 = _fwd(7)
 
         bt_rows.append({
             "Screener": row["Screener"],
@@ -213,6 +214,7 @@ def run():
             "D+1 %":    r1,
             "D+3 %":    r3,
             "D+5 %":    r5,
+            "D+7 %":    r7,
         })
 
     if not bt_rows:
@@ -225,15 +227,15 @@ def run():
     _log(f"\n{'='*65}")
     _log(f"BACKTEST SUMMARY  ({len(bt_df)} picks across {bt_df['Date'].nunique()} dates)")
     _log(f"{'='*65}")
-    _log(f"All Picks   — 1D: {_hr(bt_df['D+1 %'])}  3D: {_hr(bt_df['D+3 %'])}  5D: {_hr(bt_df['D+5 %'])}")
+    _log(f"All Picks   — 1D: {_hr(bt_df['D+1 %'])}  3D: {_hr(bt_df['D+3 %'])}  5D: {_hr(bt_df['D+5 %'])}  7D: {_hr(bt_df['D+7 %'])}")
     for screener in SHEETS:
         sub = bt_df[bt_df["Screener"] == screener]
         if len(sub):
-            _log(f"{screener[:20]:20s} — 1D: {_hr(sub['D+1 %'])}  3D: {_hr(sub['D+3 %'])}  5D: {_hr(sub['D+5 %'])}")
+            _log(f"{screener[:20]:20s} — 1D: {_hr(sub['D+1 %'])}  3D: {_hr(sub['D+3 %'])}  5D: {_hr(sub['D+5 %'])}  7D: {_hr(sub['D+7 %'])}")
     _log(f"{'='*65}\n")
 
     # ── Save Excel (upsert — update pending returns, append new picks) ───────────
-    RET_COLS = ["D+1 %", "D+3 %", "D+5 %"]
+    RET_COLS = ["D+1 %", "D+3 %", "D+5 %", "D+7 %"]
     KEY_COLS = ["Screener", "Date", "Stock"]
 
     def _upsert(existing, new):
@@ -270,7 +272,7 @@ def run():
     else:
         combined = bt_df.astype(str)
 
-    for col in ["D+1 %", "D+3 %", "D+5 %"]:
+    for col in ["D+1 %", "D+3 %", "D+5 %", "D+7 %"]:
         combined[col] = pd.to_numeric(combined[col], errors="coerce")
 
     # keep only last 30 days

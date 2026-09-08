@@ -127,7 +127,7 @@ with st.sidebar:
     ① Fetches all NSE equity stocks from NSE<br>
     ② Filters: Market Cap > ₹1000 Cr + Price > 200 EMA<br>
     ③ Scores 10 Price-Volume Action (PVA) signals<br>
-    ④ Shows top 20 with highest probability to go up in 1–7 days
+    ④ Shows top 15 with highest probability to go up in 1–7 days
     <br><br>
     <b style="color:#f1f5f9;">PVA signals:</b> candle patterns, volume confirmation, accumulation — no lagging indicators (RSI/MACD/EMA).
     <br><br>
@@ -329,40 +329,48 @@ def _write_formatted_excel(path, sheets):
             ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
     wb.save(path)
 
-def _save_history(rows, top_n=20):
+def _save_history(rows, top_n=15, keep_days=60):
     if not rows:
         return
-    # use last market-open day so weekend runs don't create non-trading dates
     d = _dt.date.today()
-    while d.weekday() >= 5:   # 5=Sat, 6=Sun
+    while d.weekday() >= 5:
         d -= _dt.timedelta(days=1)
     today = str(d)
     hist_path = _os.path.join(_DIR, "history.xlsx")
+
     df_new = (
         pd.DataFrame(rows)
         .sort_values(["Score /10", "Vol Ratio", "Mkt Cap (Cr)"], ascending=False)
         .head(top_n)
+        .astype(str)
     )
-    df_new.insert(0, "Date", today)
+
+    # Load existing sheets
+    existing = {}
     if _os.path.exists(hist_path):
         try:
-            existing = pd.read_excel(hist_path, dtype=str)
-            existing = existing[existing["Date"].astype(str) != today]
-            combined = pd.concat([existing, df_new.astype(str)], ignore_index=True)
+            xl = pd.ExcelFile(hist_path)
+            for sheet in xl.sheet_names:
+                existing[sheet] = xl.parse(sheet, dtype=str)
         except Exception:
-            combined = df_new.astype(str)
-    else:
-        combined = df_new.astype(str)
+            pass
+
+    existing[today] = df_new
+
+    # Keep last keep_days calendar days
+    sorted_dates = sorted(existing.keys())[-keep_days:]
+    sheets = {d: existing[d] for d in sorted_dates}
+
     try:
-        _write_formatted_excel(hist_path, {"History": combined})
+        _write_formatted_excel(hist_path, sheets)
     except Exception:
-        combined.to_excel(hist_path, index=False)
+        df_new.to_excel(hist_path, index=False)
 
 # ── Main UI ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="section-header">
     <span class="section-header-title">🚀 Project Up — NSE Setup Screener</span>
-    <span class="section-badge">Top 20 setups · Backtest included</span>
+    <span class="section-badge">Top 15 setups · Backtest included</span>
 </div>
 <div class="section-body">
 """, unsafe_allow_html=True)
@@ -444,7 +452,7 @@ with tab1:
             for mi, sym_ns in enumerate(ema200_pass):
                 prog_mc.progress((mi + 1) / len(ema200_pass), text=f"Market cap {mi+1}/{len(ema200_pass)}: {sym_ns}…")
                 mc = _get_mcap(sym_ns, mcap_data)
-                if mc >= 10_000_000_000:
+                if 10_000_000_000 <= mc < 2_000_000_000_000:
                     mcap_pass.append((sym_ns, mc))
                 if (mi + 1) % 50 == 0:
                     _save_json(_MCAP_CACHE, mcap_data)
@@ -477,11 +485,18 @@ with tab1:
                     vol_ratio = round(v[-1] / avgv20, 2) if avgv20 else 0.0
                     day_range = max(h[-1] - l[-1], 0.01)
 
-                    vol_dryup  = bool(avgv20 and v[-1] < avgv20 * 0.70)
-                    vol_low5   = bool(len(v) >= 5 and v[-1] <= min(v[-5:]))
-                    squeeze3   = bool(len(h) >= 3 and len(l) >= 3 and
-                                      (max(h[-3:]) - min(l[-3:])) / price < 0.04)
-                    prior_up   = bool(len(c) >= 16 and c[-1] > c[-16])
+                    high52 = max(h[-252:]) if len(h) >= 252 else max(h)
+                    rsi14  = _rsi_wilder(c)
+                    if not (50 <= rsi14 <= 68):
+                        continue
+                    if price < high52 * 0.75:
+                        continue
+
+                    vol_dryup       = bool(avgv20 and v[-1] < avgv20 * 0.70)
+                    vcp_contraction = bool(len(v) >= 3 and v[-3] > v[-2] > v[-1])
+                    squeeze3        = bool(len(h) >= 3 and len(l) >= 3 and
+                                          (max(h[-3:]) - min(l[-3:])) / price < 0.04)
+                    prior_up        = bool(len(c) >= 61 and c[-1] > c[-16] and c[-1] > c[-61])
 
                     up_v10 = dn_v10 = 0.0
                     for i in range(max(1, len(c) - 10), len(c)):
@@ -504,8 +519,8 @@ with tab1:
                     ) / 3
                     bullish_closes = avg_close_pos >= 0.55
                     at_support     = (
-                        (-0.02 <= (price / e20 - 1) <= 0.04) or
-                        (-0.01 <= (price / e50 - 1) <= 0.03)
+                        (0 <= (price / e20 - 1) <= 0.04) or
+                        (0 <= (price / e50 - 1) <= 0.03)
                     )
                     entry_trigger  = bool(
                         len(v) >= 2 and len(c) >= 2 and
@@ -513,13 +528,12 @@ with tab1:
                     )
 
                     score = sum([
-                        vol_dryup, vol_low5, squeeze3, prior_up,
+                        vol_dryup, vcp_contraction, squeeze3, prior_up,
                         net_accum, weak_selling, rising_lows,
                         bullish_closes, at_support, entry_trigger,
                     ])
 
-                    if score >= 5:
-                        high52   = max(h[-252:]) if len(h) >= 252 else max(h)
+                    if score >= 6:
                         low5     = min(l[-5:]) if len(l) >= 5 else l[-1]
                         buy_lo   = round(price * 0.995, 2)
                         buy_hi   = round(price * 1.005, 2)
@@ -564,7 +578,7 @@ with tab1:
                 pd.DataFrame(rows)
                 .sort_values(["Score /10", "Vol Ratio", "Mkt Cap (Cr)"],
                              ascending=[False, False, False])
-                .head(20)
+                .head(15)
                 .reset_index(drop=True)
             )
             df.index += 1
@@ -665,13 +679,17 @@ with tab2:
             st.warning("No history.xlsx found. Run the screener first to build pick history.")
             st.session_state.pop("bt_requested", None)
         else:
-            raw = pd.read_excel(hist_path, dtype=str)
+            xl  = pd.ExcelFile(hist_path)
+            raw = pd.concat(
+                [xl.parse(s, dtype=str).assign(Date=s) for s in xl.sheet_names],
+                ignore_index=True
+            )
             raw["Date"]      = pd.to_datetime(raw["Date"], errors="coerce")
             raw["Score /10"] = pd.to_numeric(raw["Score /10"], errors="coerce")
             raw["Price (₹)"] = pd.to_numeric(raw["Price (₹)"], errors="coerce")
             raw = raw.dropna(subset=["Date", "Stock"])
 
-            dates_avail = sorted(raw["Date"].unique())[-10:]
+            dates_avail = sorted(raw["Date"].unique())[-15:]
             raw = raw[raw["Date"].isin(dates_avail)]
 
             bt_tickers = [f"{s}.NS" for s in raw["Stock"].unique().tolist()]
@@ -727,6 +745,7 @@ with tab2:
                 p1, r1 = _fwd(1)
                 p3, r3 = _fwd(3)
                 p5, r5 = _fwd(5)
+                p7, r7 = _fwd(7)
 
                 bt_rows.append({
                     "Date":       str(pick_date.date()),
@@ -737,6 +756,7 @@ with tab2:
                     "D+1 ₹":      p1,   "D+1 %":  r1,
                     "D+3 ₹":      p3,   "D+3 %":  r3,
                     "D+5 ₹":      p5,   "D+5 %":  r5,
+                    "D+7 ₹":      p7,   "D+7 %":  r7,
                 })
 
             st.session_state["bt_data"] = bt_rows
@@ -745,7 +765,7 @@ with tab2:
     if bt_rows:
         bt_df = pd.DataFrame(bt_rows)
         bt_df["Score"] = pd.to_numeric(bt_df["Score"], errors="coerce")
-        pending = bt_df[["D+1 %","D+3 %","D+5 %"]].isnull().all(axis=None)
+        pending = bt_df[["D+1 %","D+3 %","D+5 %","D+7 %"]].isnull().all(axis=None)
         if pending:
             st.info("Picks found but all forward prices are still pending — markets haven't traded since the last pick date. Check back after the next trading session.")
 
@@ -758,14 +778,15 @@ with tab2:
             return f"{v.mean():.2f}%" if len(v) else "N/A"
 
         st.markdown("#### Summary")
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
         for col, label, val in [
             (m1, "Total Picks",   len(bt_df)),
             (m2, "Dates Covered", bt_df["Date"].nunique()),
             (m3, "Hit Rate 1D",   _hr(bt_df["D+1 %"])),
             (m4, "Hit Rate 3D",   _hr(bt_df["D+3 %"])),
             (m5, "Hit Rate 5D",   _hr(bt_df["D+5 %"])),
-            (m6, "Avg Return 5D", _avg(bt_df["D+5 %"])),
+            (m6, "Hit Rate 7D",   _hr(bt_df["D+7 %"])),
+            (m7, "Avg Return 7D", _avg(bt_df["D+7 %"])),
         ]:
             col.markdown(f"""<div style="background:white;border-left:3px solid #10b981;border-radius:7px;padding:6px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.07);">
 <div style="font-size:0.72rem;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">{label}</div>
@@ -778,30 +799,34 @@ with tab2:
             sc1, sc2 = st.columns(2)
             sc1.markdown(
                 f"**Score ≥ 8** ({len(hi)} picks)  \n"
-                f"Hit Rate — 1D: {_hr(hi['D+1 %'])} · 3D: {_hr(hi['D+3 %'])} · 5D: {_hr(hi['D+5 %'])}  \n"
-                f"Avg Return — 1D: {_avg(hi['D+1 %'])} · 3D: {_avg(hi['D+3 %'])} · 5D: {_avg(hi['D+5 %'])}"
+                f"Hit Rate — 1D: {_hr(hi['D+1 %'])} · 3D: {_hr(hi['D+3 %'])} · 5D: {_hr(hi['D+5 %'])} · 7D: {_hr(hi['D+7 %'])}  \n"
+                f"Avg Return — 1D: {_avg(hi['D+1 %'])} · 3D: {_avg(hi['D+3 %'])} · 5D: {_avg(hi['D+5 %'])} · 7D: {_avg(hi['D+7 %'])}"
             )
             sc2.markdown(
                 f"**Score 5–7** ({len(lo)} picks)  \n"
-                f"Hit Rate — 1D: {_hr(lo['D+1 %'])} · 3D: {_hr(lo['D+3 %'])} · 5D: {_hr(lo['D+5 %'])}  \n"
-                f"Avg Return — 1D: {_avg(lo['D+1 %'])} · 3D: {_avg(lo['D+3 %'])} · 5D: {_avg(lo['D+5 %'])}"
+                f"Hit Rate — 1D: {_hr(lo['D+1 %'])} · 3D: {_hr(lo['D+3 %'])} · 5D: {_hr(lo['D+5 %'])} · 7D: {_hr(lo['D+7 %'])}  \n"
+                f"Avg Return — 1D: {_avg(lo['D+1 %'])} · 3D: {_avg(lo['D+3 %'])} · 5D: {_avg(lo['D+5 %'])} · 7D: {_avg(lo['D+7 %'])}"
             )
 
         st.markdown("#### Pick-by-Pick Results")
         disp_cols = ["Date","Stock","Company","Score","Pick ₹",
-                     "D+1 ₹","D+1 %","D+3 ₹","D+3 %","D+5 ₹","D+5 %"]
+                     "D+1 ₹","D+1 %","D+3 ₹","D+3 %","D+5 ₹","D+5 %","D+7 ₹","D+7 %"]
+        bt_display = (bt_df[[c for c in disp_cols if c in bt_df.columns]]
+                      .sort_values("Date", ascending=True))
         st.dataframe(
-            bt_df[[c for c in disp_cols if c in bt_df.columns]],
+            bt_display,
             use_container_width=True,
-            height=min(700, 56 + len(bt_df) * 35),
+            height=min(700, 56 + len(bt_display) * 35),
             column_config={
                 "Pick ₹":  st.column_config.NumberColumn("Pick Price", format="₹%.2f"),
                 "D+1 ₹":   st.column_config.NumberColumn("D+1 Price",  format="₹%.2f"),
                 "D+3 ₹":   st.column_config.NumberColumn("D+3 Price",  format="₹%.2f"),
                 "D+5 ₹":   st.column_config.NumberColumn("D+5 Price",  format="₹%.2f"),
+                "D+7 ₹":   st.column_config.NumberColumn("D+7 Price",  format="₹%.2f"),
                 "D+1 %":   st.column_config.NumberColumn("D+1 Return", format="%+.2f%%"),
                 "D+3 %":   st.column_config.NumberColumn("D+3 Return", format="%+.2f%%"),
                 "D+5 %":   st.column_config.NumberColumn("D+5 Return", format="%+.2f%%"),
+                "D+7 %":   st.column_config.NumberColumn("D+7 Return", format="%+.2f%%"),
                 "Score":   st.column_config.NumberColumn("Score /10",  format="%d"),
             },
         )
@@ -810,13 +835,13 @@ with tab2:
         try:
             def _stats(df, label):
                 r = {"Group": label, "Picks": len(df)}
-                for h, col in [("1D","D+1 %"),("3D","D+3 %"),("5D","D+5 %")]:
+                for h, col in [("1D","D+1 %"),("3D","D+3 %"),("5D","D+5 %"),("7D","D+7 %")]:
                     v = df[col].dropna()
                     r[f"Hit Rate {h}"]   = f"{(v>0).mean()*100:.1f}%" if len(v) else "N/A"
                     r[f"Avg Return {h}"] = f"{v.mean():.2f}%"          if len(v) else "N/A"
                 return r
 
-            _RET_COLS = ["D+1 ₹","D+3 ₹","D+5 ₹","D+1 %","D+3 %","D+5 %"]
+            _RET_COLS = ["D+1 ₹","D+3 ₹","D+5 ₹","D+7 ₹","D+1 %","D+3 %","D+5 %","D+7 %"]
             _KEY_COLS = ["Date", "Stock"]
 
             def _upsert_up(existing, new):
@@ -852,7 +877,7 @@ with tab2:
             else:
                 combined_bt = bt_df.astype(str)
 
-            for col in ["D+1 %", "D+3 %", "D+5 %"]:
+            for col in ["D+1 %", "D+3 %", "D+5 %", "D+7 %"]:
                 combined_bt[col] = pd.to_numeric(combined_bt[col], errors="coerce")
 
             # keep only last 30 days

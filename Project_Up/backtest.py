@@ -1,7 +1,7 @@
 """
 Standalone backtest for Project Up picks.
-Reads history.xlsx, takes last 10 pick-dates, downloads 3-month price data,
-and calculates D+1 / D+3 / D+5 forward returns for each pick.
+Reads history.xlsx, takes last 15 pick-dates, downloads 3-month price data,
+and calculates D+1 / D+3 / D+5 / D+7 forward returns for each pick.
 Saves backtest_results.xlsx with two sheets: Pick Results and Summary.
 """
 import os, sys, datetime
@@ -76,7 +76,7 @@ def _avg(series):
 
 def _stats(df, label):
     r = {"Group": label, "Picks": len(df)}
-    for h, col in [("1D", "D+1 %"), ("3D", "D+3 %"), ("5D", "D+5 %")]:
+    for h, col in [("1D", "D+1 %"), ("3D", "D+3 %"), ("5D", "D+5 %"), ("7D", "D+7 %")]:
         v = df[col].dropna()
         r[f"Hit Rate {h}"]   = f"{(v > 0).mean()*100:.1f}%" if len(v) else "N/A"
         r[f"Avg Return {h}"] = f"{v.mean():.2f}%"           if len(v) else "N/A"
@@ -91,13 +91,17 @@ def run():
         _log("ERROR: history.xlsx not found. Run the screener first.")
         sys.exit(1)
 
-    raw = pd.read_excel(HIST_PATH, dtype=str)
+    xl  = pd.ExcelFile(HIST_PATH)
+    raw = pd.concat(
+        [xl.parse(s, dtype=str).assign(Date=s) for s in xl.sheet_names],
+        ignore_index=True
+    )
     raw["Date"]      = pd.to_datetime(raw["Date"], errors="coerce")
     raw["Score /10"] = pd.to_numeric(raw["Score /10"], errors="coerce")
     raw["Price (₹)"] = pd.to_numeric(raw["Price (₹)"], errors="coerce")
     raw = raw.dropna(subset=["Date", "Stock"])
 
-    dates_avail = sorted(raw["Date"].unique())[-10:]
+    dates_avail = sorted(raw["Date"].unique())[-15:]
     raw = raw[raw["Date"].isin(dates_avail)]
     _log(f"Using {len(dates_avail)} pick-dates, {len(raw)} total picks")
 
@@ -156,6 +160,7 @@ def run():
         p1, r1 = _fwd(1)
         p3, r3 = _fwd(3)
         p5, r5 = _fwd(5)
+        p7, r7 = _fwd(7)
 
         bt_rows.append({
             "Date":    str(pick_date.date()),
@@ -166,6 +171,7 @@ def run():
             "D+1 ₹":   p1,  "D+1 %": r1,
             "D+3 ₹":   p3,  "D+3 %": r3,
             "D+5 ₹":   p5,  "D+5 %": r5,
+            "D+7 ₹":   p7,  "D+7 %": r7,
         })
 
     if not bt_rows:
@@ -178,18 +184,18 @@ def run():
     _log(f"\n{'='*60}")
     _log(f"BACKTEST SUMMARY  ({len(bt_df)} picks across {bt_df['Date'].nunique()} dates)")
     _log(f"{'='*60}")
-    _log(f"Hit Rate  — 1D: {_hr(bt_df['D+1 %'])}  3D: {_hr(bt_df['D+3 %'])}  5D: {_hr(bt_df['D+5 %'])}")
-    _log(f"Avg Return— 1D: {_avg(bt_df['D+1 %'])}  3D: {_avg(bt_df['D+3 %'])}  5D: {_avg(bt_df['D+5 %'])}")
+    _log(f"Hit Rate  — 1D: {_hr(bt_df['D+1 %'])}  3D: {_hr(bt_df['D+3 %'])}  5D: {_hr(bt_df['D+5 %'])}  7D: {_hr(bt_df['D+7 %'])}")
+    _log(f"Avg Return— 1D: {_avg(bt_df['D+1 %'])}  3D: {_avg(bt_df['D+3 %'])}  5D: {_avg(bt_df['D+5 %'])}  7D: {_avg(bt_df['D+7 %'])}")
 
     hi = bt_df[bt_df["Score"] >= 8]
     lo = bt_df[bt_df["Score"] <  8]
     if len(hi):
-        _log(f"Score ≥ 8 ({len(hi)} picks): 1D {_hr(hi['D+1 %'])}  3D {_hr(hi['D+3 %'])}  5D {_hr(hi['D+5 %'])}")
+        _log(f"Score ≥ 8 ({len(hi)} picks): 1D {_hr(hi['D+1 %'])}  3D {_hr(hi['D+3 %'])}  5D {_hr(hi['D+5 %'])}  7D {_hr(hi['D+7 %'])}")
     if len(lo):
-        _log(f"Score 5-7 ({len(lo)} picks): 1D {_hr(lo['D+1 %'])}  3D {_hr(lo['D+3 %'])}  5D {_hr(lo['D+5 %'])}")
+        _log(f"Score 5-7 ({len(lo)} picks): 1D {_hr(lo['D+1 %'])}  3D {_hr(lo['D+3 %'])}  5D {_hr(lo['D+5 %'])}  7D {_hr(lo['D+7 %'])}")
     _log(f"{'='*60}\n")
 
-    RET_COLS = ["D+1 ₹","D+3 ₹","D+5 ₹","D+1 %","D+3 %","D+5 %"]
+    RET_COLS = ["D+1 ₹","D+3 ₹","D+5 ₹","D+7 ₹","D+1 %","D+3 %","D+5 %","D+7 %"]
     KEY_COLS = ["Date", "Stock"]
 
     def _upsert_up(existing, new):
@@ -225,7 +231,7 @@ def run():
     else:
         combined_bt = bt_df.astype(str)
 
-    for col in ["D+1 %", "D+3 %", "D+5 %"]:
+    for col in ["D+1 %", "D+3 %", "D+5 %", "D+7 %"]:
         combined_bt[col] = pd.to_numeric(combined_bt[col], errors="coerce")
 
     # keep only last 30 days

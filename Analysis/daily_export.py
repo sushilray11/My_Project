@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NSE F&O Screener — Daily Excel Export
-Runs all 3 screeners and saves top-20 results to a dated .xlsx file.
+Runs all 3 screeners and saves top-15 results to a dated .xlsx file.
 
 Schedule via cron (3 PM IST, weekdays):
     crontab -e
@@ -355,7 +355,7 @@ def run_probable_upside(fno, close_df, vol_df, low_df):
         df["_pri"] = df["Quality"].map(_SORT_PRIORITY)
         df = (df.sort_values(["_pri", "Score /10", "Vol Ratio"], ascending=[True, False, False])
                 .drop(columns=["_pri"])
-                .head(20).reset_index(drop=True))
+                .head(15).reset_index(drop=True))
     df.index += 1
     return df
 
@@ -526,7 +526,7 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
             pass
     df = (pd.DataFrame(rows)
           .sort_values(["Score /10", "R:R", "Gap %"], ascending=[False, False, True])
-          .head(20).reset_index(drop=True))
+          .head(15).reset_index(drop=True))
     df.index += 1
     return df
 
@@ -656,7 +656,7 @@ def run_consolidation(fno, close_df, high_df, vol_df):
     df = (pd.DataFrame(rows)
           .sort_values(["Score /10", "Days Consol.", "10D Range %"],
                        ascending=[False, False, True])
-          .head(20).reset_index(drop=True))
+          .head(15).reset_index(drop=True))
     df.index += 1
     return df
 

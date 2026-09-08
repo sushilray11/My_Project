@@ -738,7 +738,7 @@ if st.session_state.get("swing_requested"):
         _swing_df = (_swing_df
                      .sort_values(["_pri", "Score /10", "Vol Ratio"], ascending=[True, False, False])
                      .drop(columns=["_pri"])
-                     .head(20)
+                     .head(15)
                      .reset_index(drop=True))
         _swing_df.index += 1
 
@@ -1000,7 +1000,7 @@ if st.session_state.get("support_requested"):
         _sup_df = (
             pd.DataFrame(_sup_data)
             .sort_values(["Score /10", "R:R", "Gap %"], ascending=[False, False, True])
-            .head(20)
+            .head(15)
             .reset_index(drop=True)
         )
         _sup_df.index += 1
@@ -1268,7 +1268,7 @@ if st.session_state.get("consol_requested"):
             pd.DataFrame(_con_data)
             .sort_values(["Score /10", "Days Consol.", "10D Range %"],
                          ascending=[False, False, True])
-            .head(20)
+            .head(15)
             .reset_index(drop=True)
         )
         _con_df.index += 1
@@ -1342,7 +1342,7 @@ st.markdown("</div>", unsafe_allow_html=True)  # close section-body
 st.markdown("""
 <div class="section-header">
     <span class="section-header-title">📊 Backtest — Last 7 Days</span>
-    <span class="section-badge">D+1 · D+3 · D+5 returns</span>
+    <span class="section-badge">D+1 · D+3 · D+5 · D+7 returns</span>
 </div>
 <div class="section-body">
 """, unsafe_allow_html=True)
@@ -1391,7 +1391,7 @@ if st.session_state.get("analysis_bt_requested") and "analysis_bt_data" not in s
                         valid_dates.append(str(d))
                 except Exception:
                     pass
-            last7 = sorted(set(valid_dates))[-7:]
+            last7 = sorted(set(valid_dates))[-15:]
 
             for ci, h in enumerate(headers):
                 if not h:
@@ -1472,6 +1472,7 @@ if st.session_state.get("analysis_bt_requested") and "analysis_bt_data" not in s
                 p1, r1 = _fwd(1)
                 p3, r3 = _fwd(3)
                 p5, r5 = _fwd(5)
+                p7, r7 = _fwd(7)
 
                 bt_rows.append({
                     "Screener": row["Screener"],
@@ -1481,6 +1482,7 @@ if st.session_state.get("analysis_bt_requested") and "analysis_bt_data" not in s
                     "D+1 %":    r1,
                     "D+3 %":    r3,
                     "D+5 %":    r5,
+                    "D+7 %":    r7,
                 })
 
             st.session_state["analysis_bt_data"] = bt_rows
@@ -1501,7 +1503,7 @@ if "analysis_bt_data" in st.session_state:
             return f"{v.mean():.2f}%" if len(v) else "N/A"
         def _stats(df, label):
             r = {"Group": label, "Picks": len(df)}
-            for h, col in [("1D","D+1 %"),("3D","D+3 %"),("5D","D+5 %")]:
+            for h, col in [("1D","D+1 %"),("3D","D+3 %"),("5D","D+5 %"),("7D","D+7 %")]:
                 v = df[col].dropna()
                 r[f"Hit Rate {h}"]   = f"{(v>0).mean()*100:.1f}%" if len(v) else "N/A"
                 r[f"Avg Return {h}"] = f"{v.mean():.2f}%"          if len(v) else "N/A"
@@ -1509,12 +1511,16 @@ if "analysis_bt_data" in st.session_state:
 
         # ── Overall summary ───────────────────────────────────────────────────
         st.markdown("#### Overall Summary")
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Total Picks",   len(bt_df))
-        m2.metric("Dates Covered", bt_df["Date"].nunique())
-        m3.metric("Hit Rate 1D",   _hr(bt_df["D+1 %"]))
-        m4.metric("Hit Rate 3D",   _hr(bt_df["D+3 %"]))
-        m5.metric("Hit Rate 5D",   _hr(bt_df["D+5 %"]))
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        for col, label, val in [
+            (m1, "Total Picks",   len(bt_df)),
+            (m2, "Dates Covered", bt_df["Date"].nunique()),
+            (m3, "Hit Rate 1D",   _hr(bt_df["D+1 %"])),
+            (m4, "Hit Rate 3D",   _hr(bt_df["D+3 %"])),
+            (m5, "Hit Rate 5D",   _hr(bt_df["D+5 %"])),
+            (m6, "Hit Rate 7D",   _hr(bt_df["D+7 %"])),
+        ]:
+            col.metric(label, val)
 
         # ── Per-screener summary ──────────────────────────────────────────────
         st.markdown("#### By Screener")
@@ -1525,8 +1531,8 @@ if "analysis_bt_data" in st.session_state:
                 continue
             scr_cols[ci].markdown(
                 f"**{screener}** ({len(sub)} picks)  \n"
-                f"Hit Rate — 1D: {_hr(sub['D+1 %'])} · 3D: {_hr(sub['D+3 %'])} · 5D: {_hr(sub['D+5 %'])}  \n"
-                f"Avg Return — 1D: {_avg(sub['D+1 %'])} · 3D: {_avg(sub['D+3 %'])} · 5D: {_avg(sub['D+5 %'])}"
+                f"Hit Rate — 1D: {_hr(sub['D+1 %'])} · 3D: {_hr(sub['D+3 %'])} · 5D: {_hr(sub['D+5 %'])} · 7D: {_hr(sub['D+7 %'])}  \n"
+                f"Avg Return — 1D: {_avg(sub['D+1 %'])} · 3D: {_avg(sub['D+3 %'])} · 5D: {_avg(sub['D+5 %'])} · 7D: {_avg(sub['D+7 %'])}"
             )
 
         # ── Pick-by-pick table ─────────────────────────────────────────────────
@@ -1550,7 +1556,7 @@ if "analysis_bt_data" in st.session_state:
             disp = disp[disp["Stock"].str.contains(stock_filter.strip(), case=False, na=False)]
 
         st.dataframe(
-            disp[["Screener","Date","Stock","Pick ₹","D+1 %","D+3 %","D+5 %"]],
+            disp[["Screener","Date","Stock","Pick ₹","D+1 %","D+3 %","D+5 %","D+7 %"]],
             use_container_width=True,
             height=min(700, 56 + len(disp) * 35),
             column_config={
@@ -1558,6 +1564,7 @@ if "analysis_bt_data" in st.session_state:
                 "D+1 %":  st.column_config.NumberColumn("D+1 Return", format="%+.2f%%"),
                 "D+3 %":  st.column_config.NumberColumn("D+3 Return", format="%+.2f%%"),
                 "D+5 %":  st.column_config.NumberColumn("D+5 Return", format="%+.2f%%"),
+                "D+7 %":  st.column_config.NumberColumn("D+7 Return", format="%+.2f%%"),
             },
             hide_index=True,
         )
@@ -1565,7 +1572,7 @@ if "analysis_bt_data" in st.session_state:
         # ── Save Excel (upsert — update pending returns, append new picks) ────────
         bt_out = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "exports", "backtest_results.xlsx")
         try:
-            _RET_COLS = ["D+1 %", "D+3 %", "D+5 %"]
+            _RET_COLS = ["D+1 %", "D+3 %", "D+5 %", "D+7 %"]
             _KEY_COLS = ["Screener", "Date", "Stock"]
 
             def _upsert(existing, new):
@@ -1602,7 +1609,7 @@ if "analysis_bt_data" in st.session_state:
             else:
                 combined = bt_df.astype(str)
 
-            for col in ["D+1 %", "D+3 %", "D+5 %"]:
+            for col in ["D+1 %", "D+3 %", "D+5 %", "D+7 %"]:
                 combined[col] = pd.to_numeric(combined[col], errors="coerce")
 
             # keep only last 30 days

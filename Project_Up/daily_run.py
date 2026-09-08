@@ -11,6 +11,7 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 UNIVERSE_CACHE = os.path.join(DIR, "universe_cache.json")
 MCAP_CACHE     = os.path.join(DIR, "mcap_cache.json")
 HIST_PATH      = os.path.join(DIR, "history.xlsx")
+DAILY_TOP_PATH = os.path.join(DIR, "dailyTop.xlsx")
 
 def _log(msg):
     print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -49,6 +50,18 @@ def _ema_series(prices, period):
 def _ema_val(prices, period):
     s = _ema_series(prices, period)
     return s[-1] if s else None
+
+def _rsi_wilder(prices, period=14):
+    if len(prices) < period + 1:
+        return 50.0
+    gains  = [max(prices[i] - prices[i-1], 0) for i in range(1, len(prices))]
+    losses = [max(prices[i-1] - prices[i], 0) for i in range(1, len(prices))]
+    ag = sum(gains[:period])  / period
+    al = sum(losses[:period]) / period
+    for g, l in zip(gains[period:], losses[period:]):
+        ag = (ag * (period - 1) + g) / period
+        al = (al * (period - 1) + l) / period
+    return 100 - (100 / (1 + ag / max(al, 1e-10)))
 
 def _fetch_universe():
     cache = _load_json(UNIVERSE_CACHE)
@@ -149,31 +162,87 @@ def _write_formatted_excel(path, sheets):
             ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
     wb.save(path)
 
-def _save_history(rows, top_n=20):
+def _save_history(rows, top_n=15, keep_days=60):
     if not rows:
         return
-    # use last market-open day so weekend runs don't create non-trading dates
     d = datetime.date.today()
-    while d.weekday() >= 5:   # 5=Sat, 6=Sun
+    while d.weekday() >= 5:
         d -= datetime.timedelta(days=1)
     today = str(d)
+
     df_new = (
         pd.DataFrame(rows)
         .sort_values(["Score /10", "Vol Ratio", "Mkt Cap (Cr)"], ascending=False)
         .head(top_n)
+        .astype(str)
     )
-    df_new.insert(0, "Date", today)
+
+    # Load existing sheets
+    existing = {}
     if os.path.exists(HIST_PATH):
         try:
-            existing = pd.read_excel(HIST_PATH, dtype=str)
-            existing = existing[existing["Date"].astype(str) != today]
-            combined = pd.concat([existing, df_new.astype(str)], ignore_index=True)
+            xl = pd.ExcelFile(HIST_PATH)
+            for sheet in xl.sheet_names:
+                existing[sheet] = xl.parse(sheet, dtype=str)
         except Exception:
-            combined = df_new.astype(str)
-    else:
-        combined = df_new.astype(str)
-    _write_formatted_excel(HIST_PATH, {"History": combined})
-    _log(f"Saved {len(df_new)} rows to history.xlsx")
+            pass
+
+    existing[today] = df_new
+
+    # Keep last keep_days calendar days
+    sorted_dates = sorted(existing.keys())[-keep_days:]
+    sheets = {d: existing[d] for d in sorted_dates}
+
+    _write_formatted_excel(HIST_PATH, sheets)
+    _log(f"Saved {len(df_new)} rows to history.xlsx (sheet: {today}, {len(sheets)} dates stored)")
+
+def _save_daily_top(all_close, names, top_n=30, keep_days=30):
+    today = datetime.date.today()
+    while today.weekday() >= 5:
+        today -= datetime.timedelta(days=1)
+    date_str = str(today)
+
+    rows = []
+    for sym_ns, c in all_close.items():
+        if len(c) < 2:
+            continue
+        price = c[-1]
+        prev  = c[-2]
+        if prev <= 0 or price < 10:
+            continue
+        chg_pct = round((price - prev) / prev * 100, 2)
+        sym = sym_ns.replace(".NS", "")
+        rows.append({"Stock": sym, "Change %": chg_pct})
+
+    if not rows:
+        _log("Daily Top: no data to save")
+        return
+
+    df_today = (pd.DataFrame(rows)
+                .sort_values("Change %", ascending=False)
+                .head(top_n)
+                .reset_index(drop=True))
+    df_today.index += 1
+
+    # Load existing sheets, add today's, keep last keep_days
+    existing = {}
+    if os.path.exists(DAILY_TOP_PATH):
+        try:
+            xl = pd.ExcelFile(DAILY_TOP_PATH)
+            for sheet in xl.sheet_names:
+                existing[sheet] = xl.parse(sheet)
+        except Exception:
+            pass
+
+    existing[date_str] = df_today
+
+    # Keep only the most recent keep_days sheets (sorted by date)
+    sorted_dates = sorted(existing.keys())[-keep_days:]
+    sheets_to_save = {d: existing[d] for d in sorted_dates}
+
+    _write_formatted_excel(DAILY_TOP_PATH, sheets_to_save)
+    _log(f"Daily Top saved → {DAILY_TOP_PATH}  ({len(sheets_to_save)} dates stored)")
+
 
 def run():
     import yfinance as yf
@@ -230,7 +299,7 @@ def run():
     mcap_pass = []
     for mi, sym_ns in enumerate(ema200_pass):
         mc = _get_mcap(sym_ns, mcap_data)
-        if mc >= 10_000_000_000:
+        if 10_000_000_000 <= mc < 2_000_000_000_000:
             mcap_pass.append((sym_ns, mc))
         if (mi + 1) % 100 == 0:
             _save_json(MCAP_CACHE, mcap_data)
@@ -263,11 +332,18 @@ def run():
             vol_ratio = round(v[-1] / avgv20, 2) if avgv20 else 0.0
             day_range = max(h[-1] - l[-1], 0.01)
 
-            vol_dryup  = bool(avgv20 and v[-1] < avgv20 * 0.70)
-            vol_low5   = bool(len(v) >= 5 and v[-1] <= min(v[-5:]))
-            squeeze3   = bool(len(h) >= 3 and len(l) >= 3 and
-                              (max(h[-3:]) - min(l[-3:])) / price < 0.04)
-            prior_up   = bool(len(c) >= 16 and c[-1] > c[-16])
+            high52 = max(h[-252:]) if len(h) >= 252 else max(h)
+            rsi14  = _rsi_wilder(c)
+            if not (50 <= rsi14 <= 68):
+                continue
+            if price < high52 * 0.75:
+                continue
+
+            vol_dryup       = bool(avgv20 and v[-1] < avgv20 * 0.70)
+            vcp_contraction = bool(len(v) >= 3 and v[-3] > v[-2] > v[-1])
+            squeeze3        = bool(len(h) >= 3 and len(l) >= 3 and
+                                   (max(h[-3:]) - min(l[-3:])) / price < 0.04)
+            prior_up        = bool(len(c) >= 61 and c[-1] > c[-16] and c[-1] > c[-61])
 
             up_v10 = dn_v10 = 0.0
             for i in range(max(1, len(c) - 10), len(c)):
@@ -286,17 +362,16 @@ def run():
             rising_lows    = bool(len(l) >= 7 and l[-1] > l[-4] and l[-4] > l[-7])
             avg_close_pos  = sum((c[i]-l[i])/max(h[i]-l[i], 0.01) for i in range(-3, 0)) / 3
             bullish_closes = avg_close_pos >= 0.55
-            at_support     = ((-0.02 <= (price/e20 - 1) <= 0.04) or
-                              (-0.01 <= (price/e50 - 1) <= 0.03))
+            at_support     = ((0 <= (price/e20 - 1) <= 0.04) or
+                              (0 <= (price/e50 - 1) <= 0.03))
             entry_trigger  = bool(len(v) >= 2 and len(c) >= 2 and
                                   v[-1] > v[-2] and c[-1] > c[-2])
 
-            score = sum([vol_dryup, vol_low5, squeeze3, prior_up,
+            score = sum([vol_dryup, vcp_contraction, squeeze3, prior_up,
                          net_accum, weak_selling, rising_lows,
                          bullish_closes, at_support, entry_trigger])
 
-            if score >= 5:
-                high52 = max(h[-252:]) if len(h) >= 252 else max(h)
+            if score >= 6:
                 low5   = min(l[-5:]) if len(l) >= 5 else l[-1]
                 buy_lo = round(price * 0.995, 2)
                 buy_hi = round(price * 1.005, 2)
@@ -331,10 +406,13 @@ def run():
     _log(f"Scoring complete: {len(rows)} stocks qualify (score ≥ 5)")
     _save_history(rows)
 
-    top = sorted(rows, key=lambda r: (r["Score /10"], r["Vol Ratio"]), reverse=True)[:20]
-    _log("Top 20 picks:")
+    top = sorted(rows, key=lambda r: (r["Score /10"], r["Vol Ratio"]), reverse=True)[:15]
+    _log("Top 15 picks:")
     for i, r in enumerate(top, 1):
         _log(f"  {i:2d}. {r['Stock']:12s}  Score {r['Score /10']}/10  Vol {r['Vol Ratio']:.1f}x  Price ₹{r['Price (₹)']}")
+
+    # ── Step 6: Top 30 daily movers ───────────────────────────────────────────
+    _save_daily_top(all_close, names)
 
 if __name__ == "__main__":
     try:
