@@ -678,8 +678,8 @@ if st.session_state.get("swing_requested"):
 
                 # 8. At support: price near 20 EMA or 50 EMA
                 _at_support = (
-                    (-0.02 <= (_cur / _e20 - 1) <= 0.04) or
-                    (-0.01 <= (_cur / _e50 - 1) <= 0.03)
+                    (-0.02 <= (_cur / _e20 - 1) <= 0.02) or
+                    (-0.01 <= (_cur / _e50 - 1) <= 0.015)
                 )
 
                 # 9. Rising lows (7D): floor trending up
@@ -917,21 +917,22 @@ if st.session_state.get("support_requested"):
                 # 7. RSI reset: cooled to neutral zone (not in freefall, not overbought)
                 _rsi_reset = 35 <= _rsi3 <= 70
 
-                # 8. Lows stabilizing: closes not making new lows (use close to avoid penalising hammer wicks)
-                _lows_stable = bool(len(_c3) >= 5 and _c3[-1] >= _c3[-5])
+                # 8. Lows stable: recent actual lows not making lower lows
+                _lows_stable = bool(len(_l3) >= 8 and min(_l3[-3:]) >= min(_l3[-8:-3]))
 
                 # 9. Reversal candle: lower wick rejection OR 2-day consecutive up close
                 _lower_wick3 = (
                     abs(_l3[-1] - _near3) / _near3 <= 0.02 and
                     (_c3[-1] - _l3[-1]) / max(_c3[-1], 1) > 0.005
                 )
-                _bounce3 = len(_c3) >= 3 and _c3[-1] > _c3[-2] and _c3[-2] > _c3[-3]
+                _bounce3 = (len(_c3) >= 3 and _c3[-1] > _c3[-2] and _c3[-2] > _c3[-3]
+                            and len(_l3) >= 3 and _l3[-3] <= _near3 * 1.02)
                 _reversal = _lower_wick3 or _bounce3
 
                 # 10. Entry trigger: vol expanding + up close (early sign) OR breaking above base top (strong sign)
                 _base_top   = max(_c3[-6:-1]) if len(_c3) >= 6 else _c3[-2]
                 _vol_exp3   = bool(len(_v3) >= 2 and _v3[-1] > _v3[-2] and _c3[-1] > _c3[-2])
-                _break_up3  = bool(_c3[-1] > _base_top and _avgv3 and _v3[-1] > _avgv3 * 0.8)
+                _break_up3  = bool(_c3[-1] > _base_top and _avgv3 and _v3[-1] > _avgv3 * 1.2)
                 _entry3     = _vol_exp3 or _break_up3
 
                 _sc3 = sum([
@@ -1093,6 +1094,7 @@ if st.session_state.get("consol_requested"):
             _dh4  = yf.download(_tix4, period="1y", auto_adjust=True, progress=False)
             _cl4  = _dh4["Close"]
             _hi4  = _dh4["High"]
+            _lo4  = _dh4["Low"]
             _vl4  = _dh4["Volume"]
 
         _con_rows = []
@@ -1105,20 +1107,21 @@ if st.session_state.get("consol_requested"):
                 _cs4  = _cl4[_tk4].dropna()
                 _c4   = list(_cs4.astype(float))
                 _h4   = list(_hi4[_tk4].dropna().astype(float))
+                _l4   = list(_lo4[_tk4].reindex(_cs4.index).ffill().astype(float))
                 _v4   = list(_vl4[_tk4].reindex(_cs4.index).fillna(0).astype(float))
 
-                if len(_c4) < 35:
+                if len(_c4) < 35 or len(_l4) < 30:
                     continue
 
                 _p4 = _c4[-1]
 
                 # ── Range metrics ──────────────────────────────────────────
-                _range10 = (max(_c4[-10:]) - min(_c4[-10:])) / _p4 * 100
-                _range30 = (max(_c4[-30:]) - min(_c4[-30:])) / _p4 * 100
+                _range10 = (max(_h4[-10:]) - min(_l4[-10:])) / _p4 * 100
+                _range30 = (max(_h4[-30:]) - min(_l4[-30:])) / _p4 * 100
 
-                # Hard filter: range must be tight (< 4%) and stock above SMA50
+                # Hard filter: high-low range must be tight (< 6%) and stock above SMA50
                 _sma50_4_pre = sum(_c4[-min(50, len(_c4)):]) / min(50, len(_c4))
-                if _range10 > 4 or _c4[-1] <= _sma50_4_pre:
+                if _range10 > 6 or _c4[-1] <= _sma50_4_pre:
                     continue
                 # Range must be shrinking to less than half of 30D range
                 _range_contract = _range10 < _range30 * 0.50
@@ -1126,8 +1129,8 @@ if st.session_state.get("consol_requested"):
                 # ── Days in consolidation: expand lookback until range exceeds 6% ──
                 _days_consol = 10
                 for _ext in range(11, min(60, len(_c4))):
-                    _r_ext = (max(_c4[-_ext:]) - min(_c4[-_ext:])) / _p4 * 100
-                    if _r_ext > 6:
+                    _r_ext = (max(_h4[-_ext:]) - min(_l4[-_ext:])) / _p4 * 100
+                    if _r_ext > 8:
                         break
                     _days_consol = _ext
 
@@ -1147,7 +1150,7 @@ if st.session_state.get("consol_requested"):
                                 if _pre_start4 >= 5 else 0)
                 _avgv5_now4  = sum(_v4[-5:]) / 5 if len(_v4) >= 5 else 0
                 _vol_pattern4 = bool(_pre_vol5_4 > 0 and _avgv5_now4 > 0
-                                     and _pre_vol5_4 >= _avgv5_now4 * 1.2)
+                                     and _pre_vol5_4 >= _avgv5_now4 * 1.5)
 
                 # ── Bollinger Band squeeze ─────────────────────────────────
                 _sma20_4 = sum(_c4[-20:]) / 20
@@ -1166,7 +1169,7 @@ if st.session_state.get("consol_requested"):
                 # ── Volume dry-up ──────────────────────────────────────────
                 _avgv5_4  = sum(_v4[-5:])  / 5  if len(_v4) >= 5  else 0
                 _avgv20_4 = sum(_v4[-20:]) / 20 if len(_v4) >= 20 else 0
-                _vol_dry  = bool(_avgv20_4 and _avgv5_4 < _avgv20_4 * 0.85)
+                _vol_dry  = bool(_avgv20_4 and _avgv5_4 < _avgv20_4 * 0.75)
                 _vol_ratio = round(_avgv5_4 / _avgv20_4, 2) if _avgv20_4 else 1.0
 
                 # ── SMA20 flat ─────────────────────────────────────────────
@@ -1205,7 +1208,7 @@ if st.session_state.get("consol_requested"):
                 _near_brk4  = _pct_to_brk <= 1.5
 
                 # ── Stop and Target (measured move) ───────────────────────
-                _consol_lo4  = min(_c4[-_days_consol:])
+                _consol_lo4  = min(_l4[-_days_consol:])
                 _consol_hi4  = max(_c4[-_days_consol:])
                 _stop4       = round(_consol_lo4 * 0.98, 2)
                 _rsk4        = round((_p4 - _stop4) / _p4 * 100, 1)

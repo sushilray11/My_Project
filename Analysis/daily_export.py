@@ -303,8 +303,8 @@ def run_probable_upside(fno, close_df, vol_df, low_df):
             vol_dryup    = bool(avgv20 and vols[-1] < avgv20 * 0.70)
             # 8. At support (near EMA20 or EMA50)
             at_support   = (
-                (-0.02 <= (cur / e20 - 1) <= 0.04) or
-                (-0.01 <= (cur / e50 - 1) <= 0.03)
+                (-0.02 <= (cur / e20 - 1) <= 0.02) or
+                (-0.01 <= (cur / e50 - 1) <= 0.015)
             )
             # 9. Rising lows (7D)
             rising_lows  = bool(
@@ -458,21 +458,22 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
             # 7. RSI reset 35–70
             rsi_reset = 35 <= rsi <= 70
 
-            # 8. Lows stable
-            lows_stable = bool(len(c) >= 5 and c[-1] >= c[-5])
+            # 8. Lows stable: recent actual lows not making lower lows
+            lows_stable = bool(len(l) >= 8 and min(l[-3:]) >= min(l[-8:-3]))
 
             # 9. Reversal candle
             lower_wick = (
                 abs(l[-1] - near) / near <= 0.02 and
                 (c[-1] - l[-1]) / max(c[-1], 1) > 0.005
             )
-            bounce  = len(c) >= 3 and c[-1] > c[-2] and c[-2] > c[-3]
+            bounce  = (len(c) >= 3 and c[-1] > c[-2] and c[-2] > c[-3]
+                       and len(l) >= 3 and l[-3] <= near * 1.02)
             reversal = lower_wick or bounce
 
             # 10. Entry trigger
             base_top = max(c[-6:-1]) if len(c) >= 6 else c[-2]
             vol_exp  = bool(len(v) >= 2 and v[-1] > v[-2] and c[-1] > c[-2])
-            break_up = bool(c[-1] > base_top and avgv and v[-1] > avgv * 0.8)
+            break_up = bool(c[-1] > base_top and avgv and v[-1] > avgv * 1.2)
             entry    = vol_exp or break_up
 
             score = sum([at_sup, prior_up, confluence, proven_sup,
@@ -531,7 +532,7 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
     return df
 
 # ── Screener 3: Consolidation Breakout ────────────────────────────────────────
-def run_consolidation(fno, close_df, high_df, vol_df):
+def run_consolidation(fno, close_df, high_df, low_df, vol_df):
     rows = []
     for _, nse, _ in fno:
         try:
@@ -539,24 +540,25 @@ def run_consolidation(fno, close_df, high_df, vol_df):
             cs  = close_df[tk].dropna()
             c   = list(cs.astype(float))
             h   = list(high_df[tk].dropna().astype(float))
+            l   = list(low_df[tk].reindex(cs.index).ffill().astype(float))
             v   = list(vol_df[tk].reindex(cs.index).fillna(0).astype(float))
-            if len(c) < 35:
+            if len(c) < 35 or len(l) < 30:
                 continue
             p = c[-1]
-            range10   = (max(c[-10:]) - min(c[-10:])) / p * 100
-            range30   = (max(c[-30:]) - min(c[-30:])) / p * 100
+            range10   = (max(h[-10:]) - min(l[-10:])) / p * 100
+            range30   = (max(h[-30:]) - min(l[-30:])) / p * 100
             sma50_pre = sum(c[-min(50, len(c)):]) / min(50, len(c))
 
-            # hard filter: range < 4% and above SMA50
-            if range10 > 4 or c[-1] <= sma50_pre:
+            # hard filter: high-low range tight (< 6%) and above SMA50
+            if range10 > 6 or c[-1] <= sma50_pre:
                 continue
             range_contract = range10 < range30 * 0.50
 
             # days in consolidation
             days_consol = 10
             for ext in range(11, min(60, len(c))):
-                r_ext = (max(c[-ext:]) - min(c[-ext:])) / p * 100
-                if r_ext > 6:
+                r_ext = (max(h[-ext:]) - min(l[-ext:])) / p * 100
+                if r_ext > 8:
                     break
                 days_consol = ext
 
@@ -576,7 +578,7 @@ def run_consolidation(fno, close_df, high_df, vol_df):
                           if pre_start >= 5 else 0)
             avgv5_now  = sum(v[-5:]) / 5 if len(v) >= 5 else 0
             vol_pattern = bool(pre_vol5 > 0 and avgv5_now > 0
-                               and pre_vol5 >= avgv5_now * 1.2)
+                               and pre_vol5 >= avgv5_now * 1.5)
 
             # Bollinger Band squeeze
             sma20   = sum(c[-20:]) / 20
@@ -589,7 +591,7 @@ def run_consolidation(fno, close_df, high_df, vol_df):
 
             avgv5    = sum(v[-5:])  / 5  if len(v) >= 5  else 0
             avgv20   = sum(v[-20:]) / 20 if len(v) >= 20 else 0
-            vol_dry  = bool(avgv20 and avgv5 < avgv20 * 0.85)
+            vol_dry  = bool(avgv20 and avgv5 < avgv20 * 0.75)
             vol_ratio = round(avgv5 / avgv20, 2) if avgv20 else 1.0
 
             sma20_5d = sum(c[-25:-5]) / 20 if len(c) >= 25 else sma20
@@ -619,7 +621,7 @@ def run_consolidation(fno, close_df, high_df, vol_df):
             pct_to_brk = round((brk - p) / p * 100, 2)
             near_brk   = pct_to_brk <= 1.5
 
-            consol_lo = min(c[-days_consol:])
+            consol_lo = min(l[-days_consol:])
             consol_hi = max(c[-days_consol:])
             stop4     = round(consol_lo * 0.98, 2)
             rsk4      = round((p - stop4) / p * 100, 1)
@@ -927,7 +929,7 @@ if __name__ == "__main__":
     df2 = run_support_entry(FNO, close_df, low_df, high_df, vol_df)
     log(f"Support Entry:          {len(df2)} candidates")
 
-    df3 = run_consolidation(FNO, close_df, high_df, vol_df)
+    df3 = run_consolidation(FNO, close_df, high_df, low_df, vol_df)
     log(f"Consolidation Breakout: {len(df3)} candidates")
 
     write_master_excel({

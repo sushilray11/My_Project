@@ -343,7 +343,7 @@ def run():
             vcp_contraction = bool(len(v) >= 3 and v[-3] > v[-2] > v[-1])
             squeeze3        = bool(len(h) >= 3 and len(l) >= 3 and
                                    (max(h[-3:]) - min(l[-3:])) / price < 0.04)
-            prior_up        = bool(len(c) >= 61 and c[-1] > c[-16] and c[-1] > c[-61])
+            prior_up        = bool(len(c) >= 61 and c[-1] > c[-31] and c[-1] > c[-16] and c[-1] > c[-61])
 
             up_v10 = dn_v10 = 0.0
             for i in range(max(1, len(c) - 10), len(c)):
@@ -355,15 +355,15 @@ def run():
 
             weak_selling = True
             for i in range(max(1, len(c) - 5), len(c)):
-                if c[i] < c[i-1] and avgv20 and v[i] >= avgv20 * 0.80:
+                if c[i] < c[i-1] and avgv20 and v[i] >= avgv20 * 0.55:
                     weak_selling = False
                     break
 
             rising_lows    = bool(len(l) >= 7 and l[-1] > l[-4] and l[-4] > l[-7])
             avg_close_pos  = sum((c[i]-l[i])/max(h[i]-l[i], 0.01) for i in range(-3, 0)) / 3
             bullish_closes = avg_close_pos >= 0.55
-            at_support     = ((0 <= (price/e20 - 1) <= 0.04) or
-                              (0 <= (price/e50 - 1) <= 0.03))
+            at_support     = ((-0.01 <= (price/e20 - 1) <= 0.02) or
+                              (-0.01 <= (price/e50 - 1) <= 0.015))
             entry_trigger  = bool(len(v) >= 2 and len(c) >= 2 and
                                   v[-1] > v[-2] and c[-1] > c[-2])
 
