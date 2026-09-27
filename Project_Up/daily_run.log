@@ -89,3 +89,395 @@ $KALYANI.NS: possibly delisted; no price data found  (period=5d)
 [15:03:05]   14. NAVINFLUOR    Score 7/10  Vol 0.5x  Price ₹8604.5
 [15:03:05]   15. VADILALIND    Score 7/10  Vol 0.5x  Price ₹7547.5
 [15:03:06] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (2 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:06] Project Up — daily screener starting
+[15:00:06] Universe: 2570 stocks (cache)
+[15:00:06] Downloading 2570 tickers in 7 batches…
+[15:00:06]   Batch 1/7 (400 stocks)
+[15:00:33]   Batch 2/7 (400 stocks)
+[15:00:56]   Batch 3/7 (400 stocks)
+[15:01:25]   Batch 4/7 (400 stocks)
+[15:01:52]   Batch 5/7 (400 stocks)
+[15:02:08]   Batch 6/7 (400 stocks)
+[15:02:24]   Batch 7/7 (170 stocks)
+[15:02:31] 200 EMA filter: 1010 pass
+[15:02:32]   Mcap check 100/1010: 62 qualifying
+[15:02:32]   Mcap check 200/1010: 135 qualifying
+[15:02:32]   Mcap check 300/1010: 211 qualifying
+[15:02:33]   Mcap check 400/1010: 291 qualifying
+[15:02:34]   Mcap check 500/1010: 355 qualifying
+[15:02:35]   Mcap check 600/1010: 421 qualifying
+[15:02:37]   Mcap check 700/1010: 485 qualifying
+[15:02:37]   Mcap check 800/1010: 558 qualifying
+[15:02:38]   Mcap check 900/1010: 628 qualifying
+[15:02:38]   Mcap check 1000/1010: 699 qualifying
+[15:02:39] Mkt Cap filter: 708 pass
+[15:02:39] Scoring complete: 43 stocks qualify (score ≥ 5)
+[15:02:39] Saved 15 rows to history.xlsx (sheet: 2026-09-11, 8 dates stored)
+[15:02:39] Top 15 picks:
+[15:02:39]    1. SBFC          Score 8/10  Vol 0.1x  Price ₹98.19
+[15:02:39]    2. TALBROAUTO    Score 7/10  Vol 0.7x  Price ₹423.75
+[15:02:39]    3. LAURUSLABS    Score 7/10  Vol 0.6x  Price ₹1970.6
+[15:02:39]    4. FINEORG       Score 7/10  Vol 0.5x  Price ₹5172.5
+[15:02:39]    5. AUROPHARMA    Score 7/10  Vol 0.5x  Price ₹1672.6
+[15:02:39]    6. ASKAUTOLTD    Score 7/10  Vol 0.4x  Price ₹626.1
+[15:02:39]    7. GIPCL         Score 7/10  Vol 0.3x  Price ₹198.94
+[15:02:39]    8. RELIGARE      Score 7/10  Vol 0.3x  Price ₹256.8
+[15:02:39]    9. KRISHIVAL     Score 7/10  Vol 0.1x  Price ₹419.0
+[15:02:39]   10. ORIENTHOT     Score 7/10  Vol 0.1x  Price ₹139.6
+[15:02:39]   11. JAMNAAUTO     Score 6/10  Vol 3.7x  Price ₹135.35
+[15:02:39]   12. THEJO         Score 6/10  Vol 2.0x  Price ₹2199.2
+[15:02:39]   13. SFL           Score 6/10  Vol 0.7x  Price ₹691.2
+[15:02:39]   14. NYKAA         Score 6/10  Vol 0.7x  Price ₹344.0
+[15:02:39]   15. SANSERA       Score 6/10  Vol 0.6x  Price ₹4128.2
+[15:02:40] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (5 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:09] Project Up — daily screener starting
+[15:00:09] Universe: 2568 stocks (cache)
+[15:00:09] Downloading 2568 tickers in 7 batches…
+[15:00:09]   Batch 1/7 (400 stocks)
+[15:00:20]   Batch 2/7 (400 stocks)
+[15:00:33]   Batch 3/7 (400 stocks)
+[15:00:41]   Batch 4/7 (400 stocks)
+[15:00:50]   Batch 5/7 (400 stocks)
+[15:00:58]   Batch 6/7 (400 stocks)
+[15:01:07]   Batch 7/7 (168 stocks)
+
+1 Failed download:
+['UYFINCORP.NS']: TypeError("'NoneType' object is not subscriptable")
+[15:01:43] 200 EMA filter: 1019 pass
+[15:01:43]   Mcap check 100/1019: 62 qualifying
+[15:01:44]   Mcap check 200/1019: 137 qualifying
+[15:01:45]   Mcap check 300/1019: 210 qualifying
+[15:01:45]   Mcap check 400/1019: 289 qualifying
+[15:01:45]   Mcap check 500/1019: 356 qualifying
+[15:01:45]   Mcap check 600/1019: 423 qualifying
+[15:01:46]   Mcap check 700/1019: 486 qualifying
+[15:01:46]   Mcap check 800/1019: 559 qualifying
+[15:01:46]   Mcap check 900/1019: 626 qualifying
+[15:01:46]   Mcap check 1000/1019: 700 qualifying
+[15:01:46] Mkt Cap filter: 716 pass
+[15:01:47] Scoring complete: 34 stocks qualify (score ≥ 5)
+[15:01:47] Saved 15 rows to history.xlsx (sheet: 2026-09-14, 9 dates stored)
+[15:01:47] Top 15 picks:
+[15:01:47]    1. SBFC          Score 8/10  Vol 0.1x  Price ₹98.19
+[15:01:47]    2. LAURUSLABS    Score 7/10  Vol 0.6x  Price ₹1969.0
+[15:01:47]    3. AUROPHARMA    Score 7/10  Vol 0.6x  Price ₹1679.8
+[15:01:47]    4. FINEORG       Score 7/10  Vol 0.6x  Price ₹5167.5
+[15:01:47]    5. ASKAUTOLTD    Score 7/10  Vol 0.4x  Price ₹624.55
+[15:01:47]    6. KRISHIVAL     Score 7/10  Vol 0.3x  Price ₹419.95
+[15:01:47]    7. RELIGARE      Score 7/10  Vol 0.3x  Price ₹256.81
+[15:01:47]    8. JAMNAAUTO     Score 6/10  Vol 4.1x  Price ₹135.46
+[15:01:47]    9. TALBROAUTO    Score 6/10  Vol 0.8x  Price ₹423.75
+[15:01:47]   10. SANSERA       Score 6/10  Vol 0.7x  Price ₹4129.9
+[15:01:47]   11. GROWW         Score 6/10  Vol 0.6x  Price ₹200.24
+[15:01:47]   12. KPIL          Score 6/10  Vol 0.6x  Price ₹1435.7
+[15:01:47]   13. CUB           Score 6/10  Vol 0.6x  Price ₹227.32
+[15:01:47]   14. SUNDARMFIN    Score 6/10  Vol 0.6x  Price ₹4710.7
+[15:01:47]   15. SARDAEN       Score 6/10  Vol 0.6x  Price ₹524.15
+[15:01:47] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (6 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:06] Project Up — daily screener starting
+[15:00:06] Universe: 2568 stocks (cache)
+[15:00:06] Downloading 2568 tickers in 7 batches…
+[15:00:06]   Batch 1/7 (400 stocks)
+[15:00:22]   Batch 2/7 (400 stocks)
+[15:00:36]   Batch 3/7 (400 stocks)
+[15:00:49]   Batch 4/7 (400 stocks)
+[15:01:01]   Batch 5/7 (400 stocks)
+[15:01:12]   Batch 6/7 (400 stocks)
+[15:01:23]   Batch 7/7 (168 stocks)
+[15:01:28] 200 EMA filter: 933 pass
+[15:01:28]   Mcap check 100/933: 64 qualifying
+[15:01:29]   Mcap check 200/933: 137 qualifying
+[15:01:31]   Mcap check 300/933: 214 qualifying
+[15:01:34]   Mcap check 400/933: 293 qualifying
+[15:01:34]   Mcap check 500/933: 356 qualifying
+[15:01:36]   Mcap check 600/933: 419 qualifying
+[15:01:37]   Mcap check 700/933: 494 qualifying
+[15:01:40]   Mcap check 800/933: 564 qualifying
+[15:01:42]   Mcap check 900/933: 633 qualifying
+[15:01:42] Mkt Cap filter: 662 pass
+[15:01:42] Scoring complete: 19 stocks qualify (score ≥ 5)
+[15:01:42] Saved 15 rows to history.xlsx (sheet: 2026-09-15, 10 dates stored)
+[15:01:42] Top 15 picks:
+[15:01:42]    1. ANANDRATHI    Score 7/10  Vol 0.5x  Price ₹2192.0
+[15:01:42]    2. NILKAMAL      Score 7/10  Vol 0.1x  Price ₹2030.0
+[15:01:42]    3. ACMESOLAR     Score 6/10  Vol 1.8x  Price ₹420.55
+[15:01:42]    4. EMMVEE        Score 6/10  Vol 1.1x  Price ₹336.15
+[15:01:42]    5. ACUTAAS       Score 6/10  Vol 0.7x  Price ₹3277.3
+[15:01:42]    6. PREMEXPLN     Score 6/10  Vol 0.7x  Price ₹668.1
+[15:01:42]    7. VARROC        Score 6/10  Vol 0.6x  Price ₹842.15
+[15:01:42]    8. MAHSEAMLES    Score 6/10  Vol 0.6x  Price ₹703.05
+[15:01:42]    9. GROWW         Score 6/10  Vol 0.5x  Price ₹198.4
+[15:01:42]   10. REDINGTON     Score 6/10  Vol 0.5x  Price ₹378.55
+[15:01:42]   11. MAHASTEEL     Score 6/10  Vol 0.5x  Price ₹1298.5
+[15:01:42]   12. SUNDRMFAST    Score 6/10  Vol 0.5x  Price ₹1239.4
+[15:01:42]   13. SMCGLOBAL     Score 6/10  Vol 0.4x  Price ₹82.22
+[15:01:42]   14. KAPSTON       Score 6/10  Vol 0.4x  Price ₹566.15
+[15:01:42]   15. AUROPHARMA    Score 6/10  Vol 0.4x  Price ₹1648.2
+[15:01:43] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (7 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] Project Up — daily screener starting
+[15:00:05] Universe: 2568 stocks (cache)
+[15:00:05] Downloading 2568 tickers in 7 batches…
+[15:00:05]   Batch 1/7 (400 stocks)
+
+2 Failed downloads:
+['ARCHIES.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+['BAJEL.NS']: TypeError("'NoneType' object is not subscriptable")
+[15:00:26]   Batch 2/7 (400 stocks)
+[15:00:38]   Batch 3/7 (400 stocks)
+[15:00:50]   Batch 4/7 (400 stocks)
+[15:01:01]   Batch 5/7 (400 stocks)
+
+1 Failed download:
+['PROTEAN.NS']: TypeError("'NoneType' object is not subscriptable")
+[15:01:22]   Batch 6/7 (400 stocks)
+[15:01:53]   Batch 7/7 (168 stocks)
+[15:02:02] 200 EMA filter: 913 pass
+[15:02:03]   Mcap check 100/913: 65 qualifying
+[15:02:04]   Mcap check 200/913: 138 qualifying
+[15:02:05]   Mcap check 300/913: 214 qualifying
+[15:02:05]   Mcap check 400/913: 293 qualifying
+[15:02:06]   Mcap check 500/913: 358 qualifying
+[15:02:06]   Mcap check 600/913: 423 qualifying
+[15:02:07]   Mcap check 700/913: 497 qualifying
+[15:02:07]   Mcap check 800/913: 565 qualifying
+[15:02:09]   Mcap check 900/913: 640 qualifying
+[15:02:09] Mkt Cap filter: 651 pass
+[15:02:09] Scoring complete: 10 stocks qualify (score ≥ 5)
+[15:02:10] Saved 10 rows to history.xlsx (sheet: 2026-09-16, 11 dates stored)
+[15:02:10] Top 15 picks:
+[15:02:10]    1. KRISHIVAL     Score 7/10  Vol 0.2x  Price ₹418.3
+[15:02:10]    2. ANANDRATHI    Score 6/10  Vol 1.2x  Price ₹2199.4
+[15:02:10]    3. SOMANYCERA    Score 6/10  Vol 0.6x  Price ₹557.35
+[15:02:10]    4. URBANCO       Score 6/10  Vol 0.6x  Price ₹162.4
+[15:02:10]    5. UFLEX         Score 6/10  Vol 0.5x  Price ₹646.0
+[15:02:10]    6. SAGILITY      Score 6/10  Vol 0.4x  Price ₹44.9
+[15:02:10]    7. GLAXO         Score 6/10  Vol 0.4x  Price ₹2850.0
+[15:02:10]    8. CANHLIFE      Score 6/10  Vol 0.4x  Price ₹153.33
+[15:02:10]    9. HINDOILEXP    Score 6/10  Vol 0.3x  Price ₹178.65
+[15:02:10]   10. OMAXE         Score 6/10  Vol 0.1x  Price ₹115.66
+[15:02:10] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (8 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] Project Up — daily screener starting
+[15:00:05] Universe: 2568 stocks (cache)
+[15:00:05] Downloading 2568 tickers in 7 batches…
+[15:00:05]   Batch 1/7 (400 stocks)
+[15:00:24]   Batch 2/7 (400 stocks)
+[15:00:41]   Batch 3/7 (400 stocks)
+[15:01:01]   Batch 4/7 (400 stocks)
+[15:01:17]   Batch 5/7 (400 stocks)
+[15:01:33]   Batch 6/7 (400 stocks)
+[15:01:49]   Batch 7/7 (168 stocks)
+[15:01:56] 200 EMA filter: 986 pass
+[15:01:57]   Mcap check 100/986: 62 qualifying
+[15:01:58]   Mcap check 200/986: 140 qualifying
+[15:01:58]   Mcap check 300/986: 215 qualifying
+[15:01:58]   Mcap check 400/986: 297 qualifying
+[15:01:59]   Mcap check 500/986: 362 qualifying
+[15:02:00]   Mcap check 600/986: 431 qualifying
+[15:02:01]   Mcap check 700/986: 498 qualifying
+[15:02:01]   Mcap check 800/986: 568 qualifying
+[15:02:01]   Mcap check 900/986: 645 qualifying
+[15:02:01] Mkt Cap filter: 707 pass
+[15:02:02] Scoring complete: 22 stocks qualify (score ≥ 5)
+[15:02:03] Saved 15 rows to history.xlsx (sheet: 2026-09-18, 13 dates stored)
+[15:02:03] Top 15 picks:
+[15:02:03]    1. PREMEXPLN     Score 7/10  Vol 0.2x  Price ₹668.5
+[15:02:03]    2. HIKAL         Score 7/10  Vol 0.1x  Price ₹227.5
+[15:02:03]    3. STEL          Score 6/10  Vol 2.0x  Price ₹655.0
+[15:02:03]    4. PVRINOX       Score 6/10  Vol 1.1x  Price ₹1316.7
+[15:02:03]    5. RBLBANK       Score 6/10  Vol 0.7x  Price ₹408.1
+[15:02:03]    6. MANINDS       Score 6/10  Vol 0.6x  Price ₹852.45
+[15:02:03]    7. AIIL          Score 6/10  Vol 0.6x  Price ₹549.6
+[15:02:03]    8. SUDARSCHEM    Score 6/10  Vol 0.6x  Price ₹1268.2
+[15:02:03]    9. BOSCH-HCIL    Score 6/10  Vol 0.5x  Price ₹1701.0
+[15:02:03]   10. GRAPHITE      Score 6/10  Vol 0.5x  Price ₹831.75
+[15:02:03]   11. GRPLTD        Score 6/10  Vol 0.5x  Price ₹2007.9
+[15:02:03]   12. AARTIDRUGS    Score 6/10  Vol 0.4x  Price ₹434.8
+[15:02:03]   13. WOCKPHARMA    Score 6/10  Vol 0.4x  Price ₹2088.2
+[15:02:03]   14. ASIANENE      Score 6/10  Vol 0.4x  Price ₹493.35
+[15:02:03]   15. SESHAPAPER    Score 6/10  Vol 0.4x  Price ₹251.0
+[15:02:03] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (10 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:06] Project Up — daily screener starting
+[15:00:07] Universe: 2595 stocks (live NSE)
+[15:00:07] Downloading 2595 tickers in 7 batches…
+[15:00:07]   Batch 1/7 (400 stocks)
+[15:00:26]   Batch 2/7 (400 stocks)
+[15:00:45]   Batch 3/7 (400 stocks)
+[15:01:04]   Batch 4/7 (400 stocks)
+[15:01:23]   Batch 5/7 (400 stocks)
+[15:01:42]   Batch 6/7 (400 stocks)
+[15:02:05]   Batch 7/7 (195 stocks)
+[15:02:15] 200 EMA filter: 1008 pass
+[15:02:56]   Mcap check 100/1008: 61 qualifying
+[15:03:34]   Mcap check 200/1008: 137 qualifying
+[15:04:13]   Mcap check 300/1008: 209 qualifying
+[15:04:54]   Mcap check 400/1008: 291 qualifying
+$KALYANI.NS: possibly delisted; no price data found  (period=5d)
+[15:05:31]   Mcap check 500/1008: 352 qualifying
+[15:06:14]   Mcap check 600/1008: 423 qualifying
+[15:06:51]   Mcap check 700/1008: 490 qualifying
+[15:07:28]   Mcap check 800/1008: 565 qualifying
+[15:08:08]   Mcap check 900/1008: 638 qualifying
+[15:08:48]   Mcap check 1000/1008: 709 qualifying
+[15:08:51] Mkt Cap filter: 716 pass
+[15:08:51] Scoring complete: 21 stocks qualify (score ≥ 5)
+[15:08:54] Saved 15 rows to history.xlsx (sheet: 2026-09-21, 14 dates stored)
+[15:08:54] Top 15 picks:
+[15:08:54]    1. PNB           Score 7/10  Vol 0.6x  Price ₹118.3
+[15:08:54]    2. KRISHIVAL     Score 7/10  Vol 0.2x  Price ₹418.9
+[15:08:54]    3. NORTHARC      Score 6/10  Vol 0.5x  Price ₹319.6
+[15:08:54]    4. GNFC          Score 6/10  Vol 0.5x  Price ₹586.6
+[15:08:54]    5. HERITGFOOD    Score 6/10  Vol 0.5x  Price ₹420.15
+[15:08:54]    6. ANANDRATHI    Score 6/10  Vol 0.5x  Price ₹2210.0
+[15:08:54]    7. PVRINOX       Score 6/10  Vol 0.5x  Price ₹1351.3
+[15:08:54]    8. MANALIPETC    Score 6/10  Vol 0.4x  Price ₹87.45
+[15:08:54]    9. SANSTAR       Score 6/10  Vol 0.4x  Price ₹112.59
+[15:08:54]   10. PRICOLLTD     Score 6/10  Vol 0.4x  Price ₹759.35
+[15:08:54]   11. JKPAPER       Score 6/10  Vol 0.4x  Price ₹423.4
+[15:08:54]   12. ICIL          Score 6/10  Vol 0.3x  Price ₹436.4
+[15:08:54]   13. RGL           Score 6/10  Vol 0.3x  Price ₹160.31
+[15:08:54]   14. SOTL          Score 6/10  Vol 0.2x  Price ₹725.25
+[15:08:54]   15. EXPLEOSOL     Score 6/10  Vol 0.2x  Price ₹884.75
+[15:08:54] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (11 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:04] Project Up — daily screener starting
+[15:00:04] Universe: 2595 stocks (cache)
+[15:00:04] Downloading 2595 tickers in 7 batches…
+[15:00:04]   Batch 1/7 (400 stocks)
+[15:00:23]   Batch 2/7 (400 stocks)
+[15:00:39]   Batch 3/7 (400 stocks)
+[15:01:01]   Batch 4/7 (400 stocks)
+[15:01:18]   Batch 5/7 (400 stocks)
+[15:01:36]   Batch 6/7 (400 stocks)
+[15:01:53]   Batch 7/7 (195 stocks)
+[15:02:01] 200 EMA filter: 1000 pass
+[15:02:02]   Mcap check 100/1000: 62 qualifying
+[15:02:04]   Mcap check 200/1000: 137 qualifying
+[15:02:05]   Mcap check 300/1000: 208 qualifying
+[15:02:06]   Mcap check 400/1000: 289 qualifying
+[15:02:07]   Mcap check 500/1000: 353 qualifying
+[15:02:09]   Mcap check 600/1000: 422 qualifying
+[15:02:11]   Mcap check 700/1000: 486 qualifying
+[15:02:14]   Mcap check 800/1000: 558 qualifying
+[15:02:16]   Mcap check 900/1000: 632 qualifying
+[15:02:17]   Mcap check 1000/1000: 706 qualifying
+[15:02:17] Mkt Cap filter: 706 pass
+[15:02:17] Scoring complete: 31 stocks qualify (score ≥ 5)
+[15:02:18] Saved 15 rows to history.xlsx (sheet: 2026-09-22, 15 dates stored)
+[15:02:18] Top 15 picks:
+[15:02:18]    1. LGBBROSLTD    Score 7/10  Vol 0.5x  Price ₹1729.0
+[15:02:18]    2. GRPLTD        Score 7/10  Vol 0.5x  Price ₹1999.1
+[15:02:18]    3. GLAXO         Score 7/10  Vol 0.4x  Price ₹2871.6
+[15:02:18]    4. GRAPHITE      Score 7/10  Vol 0.3x  Price ₹829.95
+[15:02:18]    5. AVL           Score 7/10  Vol 0.2x  Price ₹627.6
+[15:02:18]    6. EXPLEOSOL     Score 7/10  Vol 0.1x  Price ₹880.1
+[15:02:18]    7. CASTROLIND    Score 6/10  Vol 1.3x  Price ₹195.39
+[15:02:18]    8. BHARATFORG    Score 6/10  Vol 1.0x  Price ₹2005.4
+[15:02:18]    9. GLENMARK      Score 6/10  Vol 0.8x  Price ₹2461.5
+[15:02:18]   10. CHALET        Score 6/10  Vol 0.7x  Price ₹873.55
+[15:02:18]   11. PNB           Score 6/10  Vol 0.7x  Price ₹117.16
+[15:02:18]   12. URBANCO       Score 6/10  Vol 0.7x  Price ₹174.16
+[15:02:18]   13. INDIGOPNTS    Score 6/10  Vol 0.6x  Price ₹1136.6
+[15:02:18]   14. PRICOLLTD     Score 6/10  Vol 0.6x  Price ₹766.85
+[15:02:18]   15. IIFLCAPS      Score 6/10  Vol 0.6x  Price ₹343.8
+[15:02:18] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (12 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:07] Project Up — daily screener starting
+[15:00:07] Universe: 2595 stocks (cache)
+[15:00:07] Downloading 2595 tickers in 7 batches…
+[15:00:07]   Batch 1/7 (400 stocks)
+[15:00:20]   Batch 2/7 (400 stocks)
+[15:00:31]   Batch 3/7 (400 stocks)
+
+1 Failed download:
+['JINDALSAW.NS']: TypeError("'NoneType' object is not subscriptable")
+[15:00:53]   Batch 4/7 (400 stocks)
+[15:01:06]   Batch 5/7 (400 stocks)
+[15:01:17]   Batch 6/7 (400 stocks)
+[15:01:28]   Batch 7/7 (195 stocks)
+[15:01:34] 200 EMA filter: 1054 pass
+[15:01:35]   Mcap check 100/1054: 60 qualifying
+[15:01:38]   Mcap check 200/1054: 137 qualifying
+[15:01:40]   Mcap check 300/1054: 209 qualifying
+[15:01:43]   Mcap check 400/1054: 284 qualifying
+[15:01:44]   Mcap check 500/1054: 354 qualifying
+[15:01:46]   Mcap check 600/1054: 421 qualifying
+[15:01:50]   Mcap check 700/1054: 487 qualifying
+[15:01:51]   Mcap check 800/1054: 560 qualifying
+[15:01:52]   Mcap check 900/1054: 627 qualifying
+[15:01:54]   Mcap check 1000/1054: 702 qualifying
+[15:01:55] Mkt Cap filter: 743 pass
+[15:01:55] Scoring complete: 44 stocks qualify (score ≥ 5)
+[15:01:56] Saved 15 rows to history.xlsx (sheet: 2026-09-23, 16 dates stored)
+[15:01:56] Top 15 picks:
+[15:01:56]    1. GLENMARK      Score 7/10  Vol 1.2x  Price ₹2474.9
+[15:01:56]    2. PREMEXPLN     Score 7/10  Vol 0.8x  Price ₹675.0
+[15:01:56]    3. MAITHANALL    Score 7/10  Vol 0.6x  Price ₹1014.4
+[15:01:56]    4. DEVYANI       Score 7/10  Vol 0.5x  Price ₹141.02
+[15:01:56]    5. INDIGOPNTS    Score 7/10  Vol 0.5x  Price ₹1138.6
+[15:01:56]    6. BEML          Score 7/10  Vol 0.3x  Price ₹2100.2
+[15:01:56]    7. EXPLEOSOL     Score 7/10  Vol 0.2x  Price ₹876.0
+[15:01:56]    8. SIGNPOST      Score 7/10  Vol 0.0x  Price ₹270.5
+[15:01:56]    9. TEXRAIL       Score 6/10  Vol 2.1x  Price ₹124.7
+[15:01:56]   10. TMCV          Score 6/10  Vol 1.5x  Price ₹448.8
+[15:01:56]   11. JSFB          Score 6/10  Vol 1.3x  Price ₹546.2
+[15:01:56]   12. APLLTD        Score 6/10  Vol 0.7x  Price ₹843.4
+[15:01:56]   13. BHARATFORG    Score 6/10  Vol 0.7x  Price ₹2004.1
+[15:01:56]   14. NUVOCO        Score 6/10  Vol 0.7x  Price ₹344.65
+[15:01:56]   15. CGCL          Score 6/10  Vol 0.7x  Price ₹268.6
+[15:01:56] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (13 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:07] Project Up — daily screener starting
+[15:00:07] Universe: 2595 stocks (cache)
+[15:00:07] Downloading 2595 tickers in 7 batches…
+[15:00:07]   Batch 1/7 (400 stocks)
+[15:00:21]   Batch 2/7 (400 stocks)
+[15:00:32]   Batch 3/7 (400 stocks)
+[15:00:43]   Batch 4/7 (400 stocks)
+[15:00:55]   Batch 5/7 (400 stocks)
+[15:01:08]   Batch 6/7 (400 stocks)
+[15:01:24]   Batch 7/7 (195 stocks)
+[15:01:35] 200 EMA filter: 993 pass
+[15:01:40]   Mcap check 100/993: 60 qualifying
+[15:01:41]   Mcap check 200/993: 135 qualifying
+[15:01:43]   Mcap check 300/993: 207 qualifying
+[15:01:45]   Mcap check 400/993: 287 qualifying
+[15:01:47]   Mcap check 500/993: 353 qualifying
+[15:01:50]   Mcap check 600/993: 419 qualifying
+[15:01:51]   Mcap check 700/993: 487 qualifying
+[15:01:52]   Mcap check 800/993: 558 qualifying
+[15:01:54]   Mcap check 900/993: 636 qualifying
+[15:01:55] Mkt Cap filter: 704 pass
+[15:01:56] Scoring complete: 41 stocks qualify (score ≥ 5)
+[15:01:57] Saved 15 rows to history.xlsx (sheet: 2026-09-24, 17 dates stored)
+[15:01:57] Top 15 picks:
+[15:01:57]    1. MEDANTA       Score 8/10  Vol 0.5x  Price ₹1506.0
+[15:01:57]    2. PREMEXPLN     Score 7/10  Vol 1.7x  Price ₹682.0
+[15:01:57]    3. ZYDUSLIFE     Score 7/10  Vol 1.5x  Price ₹1186.2
+[15:01:57]    4. NAZARA        Score 7/10  Vol 1.0x  Price ₹376.2
+[15:01:57]    5. AETHER        Score 7/10  Vol 0.5x  Price ₹1647.8
+[15:01:57]    6. LGBBROSLTD    Score 7/10  Vol 0.5x  Price ₹1731.2
+[15:01:57]    7. RPTECH        Score 7/10  Vol 0.5x  Price ₹884.5
+[15:01:57]    8. PARADEEP      Score 7/10  Vol 0.4x  Price ₹154.37
+[15:01:57]    9. PDSL          Score 7/10  Vol 0.4x  Price ₹360.3
+[15:01:57]   10. SEAMECLTD     Score 7/10  Vol 0.3x  Price ₹1730.8
+[15:01:57]   11. SHREEJISPG    Score 7/10  Vol 0.2x  Price ₹721.25
+[15:01:57]   12. JAGSNPHARM    Score 6/10  Vol 17.0x  Price ₹243.0
+[15:01:57]   13. ESAFSFB       Score 6/10  Vol 3.9x  Price ₹41.0
+[15:01:57]   14. BLUSPRING     Score 6/10  Vol 2.8x  Price ₹140.6
+[15:01:57]   15. NGLFINE       Score 6/10  Vol 1.9x  Price ₹2906.9
+[15:01:57] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (14 dates stored)

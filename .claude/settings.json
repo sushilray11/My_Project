@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(brew --version)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Bash(/opt/homebrew/bin/python3.12 -c \"import tkinter as tk; print\\('Tk:', tk.TkVersion\\); print\\('Tcl:', tk.TclVersion\\)\")",
+      "Bash(/opt/homebrew/bin/python3.12 -c \"import tkinter as tk; print\\('Tk version:', tk.TkVersion\\)\")",
+      "Bash(brew install *)",
+      "Bash(/opt/homebrew/bin/python3.12 -m pip install pyttsx3)",
+      "Bash(/opt/homebrew/bin/python3.12 -m pip install pyttsx3 --break-system-packages)",
+      "Bash(/opt/homebrew/bin/python3.12 -c \"import pyttsx3; print\\('pyttsx3 OK'\\)\")",
+      "Bash(python3 -c \"import pyttsx3; import os; print\\(os.path.dirname\\(pyttsx3.__file__\\)\\)\")",
+      "Bash(/opt/homebrew/bin/python3.12 main.py)",
+      "Bash(wait)",
+      "Bash(/opt/homebrew/bin/python3.12 -c ' *)",
+      "Bash(say \"Testing audio\")",
+      "Bash(echo \"say exit: $?\")",
+      "Bash(say -v ?)",
+      "Bash(say -v \"?\")",
+      "Bash(ls /System/Library/Speech/Voices/ 2>/dev/null | head -20 *)",
+      "Read(//System/Library/Speech/**)",
+      "Read(//Users/I325211/Library/Speech/**)",
+      "Bash(find /Library /System/Library -name \"*Lekha*\" -o -name \"*lekha*\" 2>/dev/null | head -20 *)",
+      "Read(//Library/**)",
+      "Read(//Users/I325211/Library/**)"
+    ]
+  }
+}

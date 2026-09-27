@@ -118,18 +118,49 @@ def _get_mcap(sym_ns, mcap_data):
     mcap_data[sym_ns] = {"mcap": mc, "date": today}
     return mc
 
-def _write_formatted_excel(path, sheets):
+def _find_streak_stocks(sheets: dict, min_streak: int = 2) -> dict:
+    """Return {stock: set_of_date_strings} for stocks in ≥ min_streak consecutive date sheets."""
+    all_dates = sorted(sheets.keys())
+    stock_indices: dict = {}
+    for ci, d in enumerate(all_dates):
+        df = sheets[d]
+        if df is None or df.empty or "Stock" not in df.columns:
+            continue
+        for stock in df["Stock"].astype(str).str.strip():
+            if stock and stock != "nan":
+                stock_indices.setdefault(stock, []).append(ci)
+
+    streak_dates: dict = {}
+    for stock, indices in stock_indices.items():
+        indices = sorted(set(indices))
+        streak = [indices[0]]
+        for i in range(1, len(indices)):
+            if indices[i] == indices[i - 1] + 1:
+                streak.append(indices[i])
+            else:
+                if len(streak) >= min_streak:
+                    for idx in streak:
+                        streak_dates.setdefault(stock, set()).add(all_dates[idx])
+                streak = [indices[i]]
+        if len(streak) >= min_streak:
+            for idx in streak:
+                streak_dates.setdefault(stock, set()).add(all_dates[idx])
+    return streak_dates
+
+
+def _write_formatted_excel(path, sheets, streak_stocks=None):
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
-    HDR_FILL = PatternFill("solid", fgColor="1D4ED8")
-    HDR_FONT = Font(color="FFFFFF", bold=True, size=10)
-    ALT_FILL = PatternFill("solid", fgColor="EFF6FF")
-    SCR_HI   = PatternFill("solid", fgColor="D1FAE5")
-    SCR_MED  = PatternFill("solid", fgColor="FEF9C3")
-    THIN     = Side(style="thin", color="E2E8F0")
-    BORDER   = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-    CENTER   = Alignment(horizontal="center", vertical="center")
+    HDR_FILL    = PatternFill("solid", fgColor="1D4ED8")
+    HDR_FONT    = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL    = PatternFill("solid", fgColor="EFF6FF")
+    SCR_HI      = PatternFill("solid", fgColor="D1FAE5")
+    SCR_MED     = PatternFill("solid", fgColor="FEF9C3")
+    STREAK_FILL = PatternFill("solid", fgColor="FFD580")  # warm orange — 2+ consecutive days
+    THIN        = Side(style="thin", color="E2E8F0")
+    BORDER      = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER      = Alignment(horizontal="center", vertical="center")
     wb = Workbook()
     wb.remove(wb.active)
     for sheet_name, df in sheets.items():
@@ -144,19 +175,28 @@ def _write_formatted_excel(path, sheets):
         ws.row_dimensions[1].height = 24
         ws.freeze_panes = "A2"
         for ri, (_, row) in enumerate(df.iterrows(), 2):
+            stock_val = str(row.get("Stock", "")).strip() if "Stock" in row else ""
+            is_streak = bool(
+                streak_stocks and stock_val
+                and sheet_name in streak_stocks.get(stock_val, set())
+            )
             for ci, col in enumerate(cols, 1):
                 val = row[col]
                 c = ws.cell(row=ri, column=ci, value=val)
                 c.border = BORDER; c.alignment = CENTER
-                if ri % 2 == 0:
-                    c.fill = ALT_FILL
-                if col in ("Score /10", "Score"):
-                    try:
-                        sv = float(val)
-                        c.fill = SCR_HI if sv >= 8 else SCR_MED
-                        c.font = Font(bold=True, size=10)
-                    except (TypeError, ValueError):
-                        pass
+                if is_streak:
+                    c.fill = STREAK_FILL
+                    c.font = Font(bold=True, size=10, color="7D3C00")
+                else:
+                    if ri % 2 == 0:
+                        c.fill = ALT_FILL
+                    if col in ("Score /10", "Score"):
+                        try:
+                            sv = float(val)
+                            c.fill = SCR_HI if sv >= 8 else SCR_MED
+                            c.font = Font(bold=True, size=10)
+                        except (TypeError, ValueError):
+                            pass
         for ci, col in enumerate(cols, 1):
             ml = max((len(str(ws.cell(r, ci).value or "")) for r in range(1, ws.max_row + 1)), default=8)
             ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
@@ -193,7 +233,8 @@ def _save_history(rows, top_n=15, keep_days=60):
     sorted_dates = sorted(existing.keys())[-keep_days:]
     sheets = {d: existing[d] for d in sorted_dates}
 
-    _write_formatted_excel(HIST_PATH, sheets)
+    streak_stocks = _find_streak_stocks(sheets, min_streak=2)
+    _write_formatted_excel(HIST_PATH, sheets, streak_stocks=streak_stocks)
     _log(f"Saved {len(df_new)} rows to history.xlsx (sheet: {today}, {len(sheets)} dates stored)")
 
 def _save_daily_top(all_close, names, top_n=30, keep_days=30):

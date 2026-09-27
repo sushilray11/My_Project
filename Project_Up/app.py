@@ -82,7 +82,7 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] > div {
 }
 
 .section-header {
-    background: #0f172a; padding: 0.85rem 1.4rem;
+    background: linear-gradient(135deg, #052e16 0%, #064e3b 100%); padding: 0.85rem 1.4rem;
     border-radius: 10px 10px 0 0;
     display: flex; align-items: center; justify-content: space-between;
     margin-top: 0.5rem;
@@ -140,9 +140,12 @@ st.markdown("""
 <div class="top-navbar">
     <div>
         <div class="nav-title">🚀 Project Up</div>
-        <div class="nav-subtitle">NSE Short-Term Bullish Screener — <span style="font-size:0.72rem;opacity:0.7;">powered by Zerodha + yfinance</span></div>
+        <div class="nav-subtitle">NSE Short-Term Bullish Screener — NSE Setup Screener &nbsp;·&nbsp; <span style="font-size:0.72rem;opacity:0.7;">powered by Zerodha + yfinance</span></div>
     </div>
-    <span class="nav-badge">Mkt Cap &gt; ₹1000 Cr · Above 200 EMA</span>
+    <div style="display:flex;gap:8px;align-items:center;">
+        <span class="nav-badge">Mkt Cap &gt; ₹1000 Cr · Above 200 EMA</span>
+        <span class="nav-badge">Top 15 setups · Backtest included</span>
+    </div>
 </div>
 <div class="content-wrap" style="padding-bottom:0">
 """, unsafe_allow_html=True)
@@ -211,6 +214,38 @@ def _fetch_universe():
     if cache.get("symbols"):
         return cache["symbols"], cache.get("names", {}), "Cache (offline)"
     return [], {}, "Error"
+
+# ── Price history download (cached 1 hour so page refreshes don't re-download) ─
+@st.cache_data(ttl=3600, show_spinner=False)
+def _download_price_history(tickers_tuple):
+    import yfinance as yf
+    tickers = list(tickers_tuple)
+    BATCH = 400
+    all_close, all_high, all_low, all_vol, all_open = {}, {}, {}, {}, {}
+    batches = [tickers[i:i+BATCH] for i in range(0, len(tickers), BATCH)]
+    for batch in batches:
+        try:
+            dh = yf.download(batch, period="1y", auto_adjust=True, progress=False, threads=True)
+            if dh.empty:
+                continue
+            for field, store in [("Close", all_close), ("High", all_high),
+                                   ("Low", all_low), ("Volume", all_vol), ("Open", all_open)]:
+                try:
+                    sub = dh[field]
+                except KeyError:
+                    continue
+                if isinstance(sub, pd.Series):
+                    s = sub.dropna()
+                    if len(s) >= 60:
+                        store[batch[0]] = list(s.astype(float))
+                else:
+                    for col in sub.columns:
+                        s = sub[col].dropna()
+                        if len(s) >= 60:
+                            store[col] = list(s.astype(float))
+        except Exception:
+            pass
+    return all_close, all_high, all_low, all_vol, all_open
 
 # ── Technical indicator helpers ────────────────────────────────────────────────
 def _ema_series(prices, period):
@@ -367,13 +402,7 @@ def _save_history(rows, top_n=15, keep_days=60):
         df_new.to_excel(hist_path, index=False)
 
 # ── Main UI ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="section-header">
-    <span class="section-header-title">🚀 Project Up — NSE Setup Screener</span>
-    <span class="section-badge">Top 15 setups · Backtest included</span>
-</div>
-<div class="section-body">
-""", unsafe_allow_html=True)
+st.markdown('<div class="section-body">', unsafe_allow_html=True)
 
 tab1, tab2 = st.tabs(["🚀 Screener", "📊 Backtest (Last 10 Days)"])
 
@@ -391,8 +420,6 @@ with tab1:
 
     if st.session_state.get("up_requested"):
         if "up_data" not in st.session_state:
-            import yfinance as yf
-
             with st.spinner("Fetching stock universe from NSE…"):
                 symbols, names, src = _fetch_universe()
 
@@ -401,38 +428,10 @@ with tab1:
                 st.stop()
 
             tickers = [f"{s}.NS" for s in symbols]
-            st.info(f"Universe: **{len(tickers)} NSE equity stocks** ({src}). Downloading 1Y price history in batches…")
+            st.info(f"Universe: **{len(tickers)} NSE equity stocks** ({src}). Loading 1Y price history…")
 
-            BATCH = 400
-            all_close, all_high, all_low, all_vol, all_open = {}, {}, {}, {}, {}
-            prog_dl = st.progress(0, text="Downloading price data…")
-            batches = [tickers[i:i+BATCH] for i in range(0, len(tickers), BATCH)]
-
-            for bi, batch in enumerate(batches):
-                prog_dl.progress((bi + 1) / len(batches), text=f"Batch {bi+1}/{len(batches)} ({len(batch)} stocks)…")
-                try:
-                    dh = yf.download(batch, period="1y", auto_adjust=True, progress=False, threads=True)
-                    if dh.empty:
-                        continue
-                    for field, store in [("Close", all_close), ("High", all_high),
-                                         ("Low", all_low), ("Volume", all_vol), ("Open", all_open)]:
-                        try:
-                            sub = dh[field]
-                        except KeyError:
-                            continue
-                        if isinstance(sub, pd.Series):
-                            s = sub.dropna()
-                            if len(s) >= 60:
-                                store[batch[0]] = list(s.astype(float))
-                        else:
-                            for col in sub.columns:
-                                s = sub[col].dropna()
-                                if len(s) >= 60:
-                                    store[col] = list(s.astype(float))
-                except Exception:
-                    pass
-
-            prog_dl.empty()
+            with st.spinner("Downloading price history (cached for 1 hour)…"):
+                all_close, all_high, all_low, all_vol, all_open = _download_price_history(tuple(tickers))
 
             ema200_pass = []
             for sym_ns in all_close:
@@ -609,7 +608,7 @@ with tab1:
                 use_container_width=True,
                 height=min(700, 56 + len(df) * 35),
                 column_config={
-                    "Stock":          st.column_config.TextColumn("Stock"),
+                    "Stock":          st.column_config.TextColumn("Stock", pinned=True),
                     "Company":        st.column_config.TextColumn("Company"),
                     "Price (₹)":     st.column_config.NumberColumn("Price (₹)",       format="₹%.2f"),
                     "Mkt Cap (Cr)":  st.column_config.NumberColumn("Mkt Cap (Cr)",    format="₹%,d Cr"),

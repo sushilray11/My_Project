@@ -619,13 +619,17 @@ def run_consolidation(fno, close_df, high_df, low_df, vol_df):
 
             brk        = round(max(h[-days_consol:]) * 1.005, 2)
             pct_to_brk = round((brk - p) / p * 100, 2)
-            near_brk   = pct_to_brk <= 1.5
+            near_brk   = 0 <= pct_to_brk <= 1.5
 
             consol_lo = min(l[-days_consol:])
             consol_hi = max(c[-days_consol:])
             stop4     = round(consol_lo * 0.98, 2)
             rsk4      = round((p - stop4) / p * 100, 1)
             tgt4      = round(brk + (consol_hi - consol_lo), 2)
+            rwd4      = round((tgt4 - p) / p * 100, 1)
+            rr4       = round(rwd4 / rsk4, 1) if rsk4 > 0 else 0.0
+            if rr4 < 1.5:
+                continue
 
             score = sum([
                 strong_move, vol_pattern, range_contract, bb_sq,
@@ -639,7 +643,7 @@ def run_consolidation(fno, close_df, high_df, low_df, vol_df):
                     "Sector": SECTOR.get(nse, "Other"),
                     "Price (₹)": round(p, 2), "Breakout ₹": brk,
                     "To Breakout%": pct_to_brk, "Target ₹": tgt4,
-                    "Stop ₹": stop4, "Risk %": rsk4,
+                    "Stop ₹": stop4, "Risk %": rsk4, "R:R": rr4,
                     "Days Consol.": days_consol,
                     "10D Range %": round(range10, 2), "BB Width %": round(bb_w, 2),
                     "Vol Ratio": vol_ratio, "RSI": round(rsi4, 1),
@@ -772,6 +776,31 @@ def write_master_excel(sheets_data: dict, date_str: str):
     wb.save(MASTER_FILE)
 
 # ── Consolidated history ──────────────────────────────────────────────────────
+def _find_streak_dates(date_data: dict, all_dates: list, min_streak: int = 3) -> dict:
+    """Return {stock: set_of_date_strings} for stocks with ≥ min_streak consecutive dates."""
+    stock_indices: dict = {}
+    for ci, d in enumerate(all_dates):
+        for stock in date_data.get(d, []):
+            stock_indices.setdefault(stock, []).append(ci)
+
+    streak_dates: dict = {}
+    for stock, indices in stock_indices.items():
+        indices = sorted(set(indices))
+        streak = [indices[0]]
+        for i in range(1, len(indices)):
+            if indices[i] == indices[i - 1] + 1:
+                streak.append(indices[i])
+            else:
+                if len(streak) >= min_streak:
+                    for idx in streak:
+                        streak_dates.setdefault(stock, set()).add(all_dates[idx])
+                streak = [indices[i]]
+        if len(streak) >= min_streak:
+            for idx in streak:
+                streak_dates.setdefault(stock, set()).add(all_dates[idx])
+    return streak_dates
+
+
 def update_consolidated_history(results: dict):
     """
     Layout per sheet:
@@ -844,10 +873,11 @@ def update_consolidated_history(results: dict):
         ]
 
     # ── Build workbook ─────────────────────────────────────────────────────────
-    HDR_FILL  = PatternFill("solid", fgColor="1F497D")
-    HDR_FONT  = Font(bold=True, color="FFFFFF", size=10)
-    ALT_FILL  = PatternFill("solid", fgColor="EEF3FB")
-    CENTER    = Alignment(horizontal="center", vertical="center")
+    HDR_FILL   = PatternFill("solid", fgColor="1F497D")
+    HDR_FONT   = Font(bold=True, color="FFFFFF", size=10)
+    ALT_FILL   = PatternFill("solid", fgColor="EEF3FB")
+    STREAK_FILL = PatternFill("solid", fgColor="FFD580")  # warm orange — 3+ consecutive days
+    CENTER     = Alignment(horizontal="center", vertical="center")
     THIN      = Border(
         left   = Side(style="thin", color="D0D0D0"),
         right  = Side(style="thin", color="D0D0D0"),
@@ -874,6 +904,9 @@ def update_consolidated_history(results: dict):
         ws.sheet_properties.tabColor = TAB_COLORS.get(sheet_name, "4472C4")
         ws.freeze_panes = "A2"
 
+        # Pre-compute streak dates for this sheet
+        streak_dates = _find_streak_dates(date_data, all_dates)
+
         # Row 1: date headers
         for ci, date_str in enumerate(all_dates, 1):
             cell = ws.cell(row=1, column=ci, value=date_str)
@@ -891,9 +924,14 @@ def update_consolidated_history(results: dict):
                 c = ws.cell(row=ri + 2, column=ci, value=val)
                 c.alignment = CENTER
                 c.border    = THIN
-                c.font      = Font(bold=bool(val), size=10)
-                if val and (ri + 2) % 2 == 0:
-                    c.fill = ALT_FILL
+                is_streak = bool(val and date_str in streak_dates.get(val, set()))
+                if is_streak:
+                    c.fill = STREAK_FILL
+                    c.font = Font(bold=True, size=10, color="7D3C00")
+                else:
+                    c.font = Font(bold=bool(val), size=10)
+                    if val and (ri + 2) % 2 == 0:
+                        c.fill = ALT_FILL
 
         for ci in range(1, len(all_dates) + 1):
             ws.column_dimensions[get_column_letter(ci)].width = 14

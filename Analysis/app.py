@@ -755,7 +755,7 @@ if st.session_state.get("swing_requested"):
             use_container_width=True,
             height=min(600, 56 + len(_swing_df) * 35),
             column_config={
-                "Stock":          st.column_config.TextColumn("Stock"),
+                "Stock":          st.column_config.TextColumn("Stock", pinned=True),
                 "Sector":         st.column_config.TextColumn("Sector"),
                 "Price (₹)":      st.column_config.NumberColumn("Price (₹)",     format="₹%.2f"),
                 "RSI":            st.column_config.NumberColumn("RSI",            format="%.1f"),
@@ -767,7 +767,7 @@ if st.session_state.get("swing_requested"):
                 "Full Trend":     st.column_config.TextColumn("SMA50>SMA200"),
                 "Quality":        st.column_config.TextColumn("Quality"),
                 "Score /10":      st.column_config.NumberColumn("Score /10",      format="%d ⭐"),
-                "Chart":          st.column_config.LinkColumn("TradingView",      display_text="📈 Open Chart"),
+                "Chart":          st.column_config.LinkColumn("TradingView",      display_text="📈 Chart"),
             },
         )
         st.caption(
@@ -866,6 +866,11 @@ if st.session_state.get("support_requested"):
                 _hi20_3 = max(_h3s[-20:]) if len(_h3s) >= 20 else max(_h3s)
                 _pb3    = (_hi20_3 - _p3) / _hi20_3 * 100
                 if not (3 <= _pb3 <= 25):
+                    continue
+
+                # hard filter: must be a pullback in an uptrend (SMA50 rising)
+                _sma50_20ago_hf = sum(_c3[-70:-20]) / 50 if len(_c3) >= 70 else None
+                if not (_sma50_20ago_hf and _sm50_3 >= _sma50_20ago_hf * 0.995):
                     continue
 
                 # RSI (Wilder's)
@@ -1017,7 +1022,7 @@ if st.session_state.get("support_requested"):
             use_container_width=True,
             height=min(600, 56 + len(_sup_df) * 35),
             column_config={
-                "Stock":          st.column_config.TextColumn("Stock"),
+                "Stock":          st.column_config.TextColumn("Stock", pinned=True),
                 "Sector":         st.column_config.TextColumn("Sector"),
                 "Price (₹)":      st.column_config.NumberColumn("Price (₹)",     format="₹%.2f"),
                 "Support (₹)":    st.column_config.NumberColumn("Support (₹)",   format="₹%.2f"),
@@ -1038,7 +1043,7 @@ if st.session_state.get("support_requested"):
                 "Stop (₹)":      st.column_config.NumberColumn("Stop (₹)",       format="₹%.2f"),
                 "R:R":            st.column_config.NumberColumn("Reward:Risk",    format="%.1f:1"),
                 "Score /10":      st.column_config.NumberColumn("Score /10",      format="%d ⭐"),
-                "Chart":          st.column_config.LinkColumn("TradingView",      display_text="📈 Open Chart"),
+                "Chart":          st.column_config.LinkColumn("TradingView",      display_text="📈 Chart"),
             },
         )
 
@@ -1205,7 +1210,7 @@ if st.session_state.get("consol_requested"):
                 _pct_to_brk = round((_brk4 - _p4) / _p4 * 100, 2)
 
                 # ── Breakout imminence: price within 1.5% of breakout level ──
-                _near_brk4  = _pct_to_brk <= 1.5
+                _near_brk4  = 0 <= _pct_to_brk <= 1.5
 
                 # ── Stop and Target (measured move) ───────────────────────
                 _consol_lo4  = min(_l4[-_days_consol:])
@@ -1213,6 +1218,10 @@ if st.session_state.get("consol_requested"):
                 _stop4       = round(_consol_lo4 * 0.98, 2)
                 _rsk4        = round((_p4 - _stop4) / _p4 * 100, 1)
                 _tgt4        = round(_brk4 + (_consol_hi4 - _consol_lo4), 2)
+                _rwd4        = round((_tgt4 - _p4) / _p4 * 100, 1)
+                _rr4         = round(_rwd4 / _rsk4, 1) if _rsk4 > 0 else 0.0
+                if _rr4 < 1.5:
+                    continue
 
                 # ── Entry Trigger ─────────────────────────────────────────
                 _vol_exp4  = bool(len(_v4) >= 2 and _v4[-1] > _v4[-2] and _c4[-1] > _c4[-2])
@@ -1243,6 +1252,7 @@ if st.session_state.get("consol_requested"):
                         "Target ₹":     _tgt4,
                         "Stop ₹":       _stop4,
                         "Risk %":       _rsk4,
+                        "R:R":          _rr4,
                         "Days Consol.": _days_consol,
                         "10D Range %":  round(_range10, 2),
                         "BB Width %":   round(_bb_w, 2),
@@ -1287,7 +1297,7 @@ if st.session_state.get("consol_requested"):
             use_container_width=True,
             height=min(600, 56 + len(_con_df) * 35),
             column_config={
-                "Stock":        st.column_config.TextColumn("Stock"),
+                "Stock":        st.column_config.TextColumn("Stock", pinned=True),
                 "Sector":       st.column_config.TextColumn("Sector"),
                 "Price (₹)":   st.column_config.NumberColumn("Price (₹)",      format="₹%.2f"),
                 "Breakout ₹":  st.column_config.NumberColumn("Breakout ₹",     format="₹%.2f"),
@@ -1295,6 +1305,7 @@ if st.session_state.get("consol_requested"):
                 "Target ₹":    st.column_config.NumberColumn("Target ₹",       format="₹%.2f"),
                 "Stop ₹":      st.column_config.NumberColumn("Stop ₹",         format="₹%.2f"),
                 "Risk %":      st.column_config.NumberColumn("Risk %",          format="%.1f%%"),
+                "R:R":         st.column_config.NumberColumn("Reward:Risk",     format="%.1f:1"),
                 "Days Consol.":st.column_config.NumberColumn("Days Consol.",   format="%d days"),
                 "10D Range %": st.column_config.NumberColumn("10D Range %",    format="%.2f%%"),
                 "BB Width %":  st.column_config.NumberColumn("BB Width %",     format="%.2f%%"),
@@ -1309,7 +1320,7 @@ if st.session_state.get("consol_requested"):
                 "Prior Trend":  st.column_config.TextColumn("Prior Trend"),
                 "Entry Trigger":st.column_config.TextColumn("Entry Trigger"),
                 "Score /10":   st.column_config.NumberColumn("Score /10",      format="%d"),
-                "Chart":       st.column_config.LinkColumn("TradingView",      display_text="📈 Open Chart"),
+                "Chart":       st.column_config.LinkColumn("TradingView",      display_text="📈 Chart"),
             },
         )
 
@@ -1674,7 +1685,7 @@ if _fno_search.strip():
 _col_cfg = {
     "Stock":   st.column_config.TextColumn("Stock"),
     "Company": st.column_config.TextColumn("Company"),
-    "Chart":   st.column_config.LinkColumn("TradingView", display_text="📈 Open Chart"),
+    "Chart":   st.column_config.LinkColumn("TradingView", display_text="📈 Chart"),
 }
 if _prices:
     _col_cfg["Price (₹)"] = st.column_config.NumberColumn("Price (₹)", format="₹%.2f")
@@ -1688,6 +1699,254 @@ st.dataframe(
     hide_index=True,
 )
 st.caption(f"Showing {len(fno_df)} of {len(_FNO)} NSE F&O stocks")
+st.markdown("</div>", unsafe_allow_html=True)  # close section-body
+
+
+# ── Industry stocks popup dialog ───────────────────────────────────────────────
+@st.dialog("Industry Stocks", width="large")
+def _show_industry_stocks_dialog(industry_name, stock_rows):
+    st.markdown(
+        f"<div style='font-size:1.1rem;font-weight:700;color:#0f172a;margin-bottom:0.6rem;'>"
+        f"🏭 {industry_name} &nbsp;<span style='font-size:0.8rem;font-weight:400;"
+        f"color:#64748b;'>{len(stock_rows)} stocks</span></div>",
+        unsafe_allow_html=True,
+    )
+
+    def _dp(v):
+        if v is None: return "—"
+        return f"{'+'if v>=0 else ''}{v:.2f}%"
+
+    _s_df = pd.DataFrame([{
+        "Symbol":  r["Symbol"],
+        "Company": r["Company"],
+        "1D (%)":  _dp(r["1D (%)"]),
+        "1W (%)":  _dp(r["1W (%)"]),
+        "1M (%)":  _dp(r["1M (%)"]),
+        "Chart":   f"https://www.tradingview.com/chart/?symbol=NSE:{r['Symbol']}",
+    } for r in stock_rows])
+
+    st.dataframe(
+        _s_df,
+        use_container_width=True,
+        height=min(600, 56 + len(_s_df) * 38),
+        column_config={
+            "Symbol":  st.column_config.TextColumn("Symbol"),
+            "Company": st.column_config.TextColumn("Company"),
+            "1D (%)":  st.column_config.TextColumn("1D (%)"),
+            "1W (%)":  st.column_config.TextColumn("1W (%)"),
+            "1M (%)":  st.column_config.TextColumn("1M (%)"),
+            "Chart":   st.column_config.LinkColumn("Chart", display_text="📈"),
+        },
+        hide_index=True,
+    )
+    st.caption("Sorted by 1M return · click 📈 to open TradingView chart")
+
+# ── Section: Industry Performance vs CNX 500 ──────────────────────────────────
+st.markdown("""
+<div class="section-header">
+    <span class="section-header-title">🏭 Industry Performance vs CNX 500</span>
+    <span class="section-badge">Sector Comparison</span>
+</div>
+<div class="section-body">
+""", unsafe_allow_html=True)
+
+st.caption("Compares each industry's average return against the CNX 500 index — click any row to see its stocks")
+
+if st.button("📊 Load Industry Performance", key="load_industry_perf"):
+    st.session_state.pop("industry_perf_data", None)
+    st.session_state["industry_perf_requested"] = True
+
+if st.session_state.get("industry_perf_requested"):
+    if "industry_perf_data" not in st.session_state:
+        import yfinance as yf
+
+        _nse_syms_ip = [nse for _, nse, _ in _FNO]
+        _tickers_ip  = [f"{s}.NS" for s in _nse_syms_ip]
+
+        with st.spinner("Fetching 1-month price data for industry analysis…"):
+            try:
+                # Fetch CNX 500 separately to avoid batch-download column issues
+                _cnx_1d = _cnx_1w = _cnx_1m = None
+                for _cnx_try in ["^CNX500", "CNX500.NS", "^NSEI"]:
+                    try:
+                        _cnx_hist = yf.download(_cnx_try, period="1mo", auto_adjust=True, progress=False)
+                        _cnx_raw  = _cnx_hist["Close"] if "Close" in _cnx_hist.columns else _cnx_hist.iloc[:, 0]
+                        if hasattr(_cnx_raw, "columns"):
+                            _cnx_raw = _cnx_raw.iloc[:, 0]
+                        _cnx_series = _cnx_raw.dropna()
+                        if len(_cnx_series) >= 2:
+                            _cnx_1m = round((_cnx_series.iloc[-1] / _cnx_series.iloc[0]  - 1) * 100, 2)
+                            _cnx_1d = round((_cnx_series.iloc[-1] / _cnx_series.iloc[-2] - 1) * 100, 2)
+                            _w_idx  = max(0, len(_cnx_series) - 6)
+                            _cnx_1w = round((_cnx_series.iloc[-1] / _cnx_series.iloc[_w_idx] - 1) * 100, 2)
+                            break
+                    except Exception:
+                        pass
+
+                _ip_hist  = yf.download(_tickers_ip, period="1mo", auto_adjust=True, progress=False)
+                _ip_close = _ip_hist["Close"]
+
+                # Per-stock returns + per-industry stock lists
+                _stock_returns      = {}
+                _stocks_by_industry = {}
+                for _nse_sym, _tick in zip(_nse_syms_ip, _tickers_ip):
+                    try:
+                        _s = _ip_close[_tick].dropna() if _tick in _ip_close.columns else pd.Series([], dtype=float)
+                        if len(_s) >= 2:
+                            _r1d = round((_s.iloc[-1] / _s.iloc[-2] - 1) * 100, 2)
+                            _r1w = round((_s.iloc[-1] / _s.iloc[max(0, len(_s) - 6)] - 1) * 100, 2)
+                            _r1m = round((_s.iloc[-1] / _s.iloc[0] - 1) * 100, 2)
+                            _stock_returns[_nse_sym] = (_r1d, _r1w, _r1m)
+                            _sec_key = _SECTOR.get(_nse_sym, "Other")
+                            _stocks_by_industry.setdefault(_sec_key, []).append({
+                                "Symbol":  _nse_sym,
+                                "Company": _COMPANY_NAMES_MERGED.get(_nse_sym, _nse_sym),
+                                "1D (%)":  _r1d,
+                                "1W (%)":  _r1w,
+                                "1M (%)":  _r1m,
+                            })
+                    except Exception:
+                        pass
+
+                # Sort each industry's stocks by 1M return descending
+                for _sec_key in _stocks_by_industry:
+                    _stocks_by_industry[_sec_key].sort(
+                        key=lambda r: r["1M (%)"] if r["1M (%)"] is not None else -999,
+                        reverse=True,
+                    )
+
+                # Aggregate by sector
+                _sector_data = {}
+                for _sym, (_r1d, _r1w, _r1m) in _stock_returns.items():
+                    _sec = _SECTOR.get(_sym, "Other")
+                    if _sec not in _sector_data:
+                        _sector_data[_sec] = {"1d": [], "1w": [], "1m": [], "count": 0}
+                    _sector_data[_sec]["1d"].append(_r1d)
+                    _sector_data[_sec]["1w"].append(_r1w)
+                    _sector_data[_sec]["1m"].append(_r1m)
+                    _sector_data[_sec]["count"] += 1
+
+                _industry_rows = []
+                for _sec, _vals in _sector_data.items():
+                    _avg1d = round(sum(_vals["1d"]) / len(_vals["1d"]), 2) if _vals["1d"] else None
+                    _avg1w = round(sum(_vals["1w"]) / len(_vals["1w"]), 2) if _vals["1w"] else None
+                    _avg1m = round(sum(_vals["1m"]) / len(_vals["1m"]), 2) if _vals["1m"] else None
+                    _vs1d  = round(_avg1d - _cnx_1d, 2) if (_avg1d is not None and _cnx_1d is not None) else None
+                    _vs1w  = round(_avg1w - _cnx_1w, 2) if (_avg1w is not None and _cnx_1w is not None) else None
+                    _vs1m  = round(_avg1m - _cnx_1m, 2) if (_avg1m is not None and _cnx_1m is not None) else None
+                    _industry_rows.append({
+                        "Industry":      _sec,
+                        "Stocks":        _vals["count"],
+                        "1D (%)":        _avg1d,
+                        "1W (%)":        _avg1w,
+                        "1M (%)":        _avg1m,
+                        "vs CNX500 1D":  _vs1d,
+                        "vs CNX500 1W":  _vs1w,
+                        "vs CNX500 1M":  _vs1m,
+                    })
+
+                # Sort by 1M return descending (best performers first)
+                _industry_rows.sort(key=lambda r: r["1M (%)"] if r["1M (%)"] is not None else -999, reverse=True)
+
+                st.session_state["industry_perf_data"] = {
+                    "rows":               _industry_rows,
+                    "cnx_1d":             _cnx_1d,
+                    "cnx_1w":             _cnx_1w,
+                    "cnx_1m":             _cnx_1m,
+                    "stocks_by_industry": _stocks_by_industry,
+                }
+            except Exception as _ip_err:
+                st.error(f"Failed to fetch industry data: {_ip_err}")
+
+    _ipd = st.session_state.get("industry_perf_data")
+    if _ipd:
+        _cnx_1d_v = _ipd["cnx_1d"]
+        _cnx_1w_v = _ipd["cnx_1w"]
+        _cnx_1m_v = _ipd["cnx_1m"]
+
+        # CNX 500 reference bar
+        _cnx_cols = st.columns(3)
+        for _ci, (_lbl, _val) in enumerate([
+            ("CNX 500 · 1D", _cnx_1d_v),
+            ("CNX 500 · 1W", _cnx_1w_v),
+            ("CNX 500 · 1M", _cnx_1m_v),
+        ]):
+            _color   = "#16a34a" if (_val or 0) >= 0 else "#dc2626"
+            _val_str = f'{"+" if _val >= 0 else ""}{_val}%' if _val is not None else "N/A"
+            _cnx_cols[_ci].markdown(f"""
+<div style="background:white;border-radius:10px;padding:0.9rem 1.1rem;
+     box-shadow:0 1px 3px rgba(0,0,0,0.08);border-left:4px solid {_color};margin-bottom:0.8rem;">
+    <div style="color:#64748b;font-size:0.72rem;text-transform:uppercase;
+         letter-spacing:0.05em;font-weight:500;">{_lbl}</div>
+    <div style="color:{_color};font-size:1.1rem;font-weight:700;margin-top:4px;">
+        {_val_str}
+    </div>
+</div>""", unsafe_allow_html=True)
+
+        _ind_df = pd.DataFrame(_ipd["rows"])
+
+        def _fmt_pct(v):
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                return "—"
+            sign = "+" if v >= 0 else ""
+            return f"{sign}{v:.2f}%"
+
+        def _fmt_vs(v):
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                return "—"
+            sign = "▲" if v > 0 else ("▼" if v < 0 else "–")
+            return f"{sign} {abs(v):.2f}%"
+
+        _disp_df = _ind_df.copy()
+        for _col in ["1D (%)", "1W (%)", "1M (%)"]:
+            _disp_df[_col] = _disp_df[_col].apply(_fmt_pct)
+        for _col in ["vs CNX500 1D", "vs CNX500 1W", "vs CNX500 1M"]:
+            _disp_df[_col] = _disp_df[_col].apply(_fmt_vs)
+
+        # Key counter — incrementing it forces a fresh dataframe render (clears selection)
+        st.session_state.setdefault("_ind_tbl_key",      0)
+        st.session_state.setdefault("_pending_industry", None)
+
+        _ind_sel = st.dataframe(
+            _disp_df,
+            key=f"ind_tbl_{st.session_state['_ind_tbl_key']}",
+            use_container_width=True,
+            height=min(700, 56 + len(_disp_df) * 38),
+            selection_mode="single-row",
+            on_select="rerun",
+            column_config={
+                "Industry":      st.column_config.TextColumn("Industry"),
+                "Stocks":        st.column_config.NumberColumn("Stocks", format="%d"),
+                "1D (%)":        st.column_config.TextColumn("1D Avg (%)"),
+                "1W (%)":        st.column_config.TextColumn("1W Avg (%)"),
+                "1M (%)":        st.column_config.TextColumn("1M Avg (%)"),
+                "vs CNX500 1D":  st.column_config.TextColumn("vs CNX 500 · 1D"),
+                "vs CNX500 1W":  st.column_config.TextColumn("vs CNX 500 · 1W"),
+                "vs CNX500 1M":  st.column_config.TextColumn("vs CNX 500 · 1M"),
+            },
+            hide_index=True,
+        )
+        st.caption("Sorted by 1M return · click any row to see the stocks in that industry")
+
+        _sel_rows = _ind_sel.selection.rows if _ind_sel.selection else []
+
+        # New row clicked — save industry, bump key (clears tick), rerun to show dialog
+        if _sel_rows and st.session_state["_pending_industry"] is None:
+            _sel_industry = _disp_df.iloc[_sel_rows[0]]["Industry"]
+            _sbi          = _ipd.get("stocks_by_industry", {})
+            if _sel_industry in _sbi:
+                st.session_state["_pending_industry"] = _sel_industry
+                st.session_state["_ind_tbl_key"]     += 1
+                st.rerun()
+
+        # Show dialog for the pending industry, then clear it so it won't reopen
+        if st.session_state["_pending_industry"] is not None:
+            _sbi      = _ipd.get("stocks_by_industry", {})
+            _ind_name = st.session_state["_pending_industry"]
+            st.session_state["_pending_industry"] = None
+            if _ind_name in _sbi:
+                _show_industry_stocks_dialog(_ind_name, _sbi[_ind_name])
+
 st.markdown("</div>", unsafe_allow_html=True)  # close section-body
 
 
