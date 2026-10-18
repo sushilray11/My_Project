@@ -99,7 +99,7 @@ div[data-testid="metric-container"] [data-testid="stMetricValue"] > div {
     margin-bottom: 1.5rem;
 }
 
-div[data-testid="stDataFrame"] { border-radius: 8px; overflow: hidden; }
+div[data-testid="stDataFrame"] { border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0 !important; }
 div.stButton > button {
     background: linear-gradient(135deg, #059669, #10b981) !important;
     color: white !important; border: none !important;
@@ -110,6 +110,39 @@ div.stButton > button {
 div.stButton > button:hover { opacity: 0.9 !important; transform: translateY(-1px) !important; }
 div[data-testid="stProgressBar"] > div { background: #10b981 !important; }
 hr { border-color: #e2e8f0 !important; margin: 1.2rem 0 !important; }
+
+button[data-baseweb="tab"] {
+    background-color: #f1f5f9 !important;
+    color: #475569 !important;
+    border: none !important;
+    border-bottom: 3px solid transparent !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+    padding: 0.75rem 1.5rem !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    margin-right: 0.5rem !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+button[data-baseweb="tab"]:hover {
+    background-color: #e2e8f0 !important;
+    color: #1e293b !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: white !important;
+    color: #059669 !important;
+    border-bottom: 3px solid #10b981 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+}
+[data-testid="stTabs"] {
+    border-top: 1px solid #e2e8f0 !important;
+    padding-top: 1.2rem !important;
+}
+[role="tabpanel"] {
+    padding: 1.5rem 1.5rem 2rem !important;
+    background: #f0efed !important;
+    border-radius: 0 0 12px 12px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -125,7 +158,7 @@ with st.sidebar:
     <div style="padding:0.5rem;font-size:0.78rem;color:#94a3b8;line-height:1.6;">
     <b style="color:#f1f5f9;">How it works</b><br><br>
     ① Fetches all NSE equity stocks from NSE<br>
-    ② Filters: Market Cap > ₹1000 Cr + Price > 200 EMA<br>
+    ② Filters: Market Cap ₹1000 Cr – ₹50,000 Cr + Price > 200 EMA<br>
     ③ Scores 10 Price-Volume Action (PVA) signals<br>
     ④ Shows top 15 with highest probability to go up in 1–7 days
     <br><br>
@@ -143,7 +176,7 @@ st.markdown("""
         <div class="nav-subtitle">NSE Short-Term Bullish Screener — NSE Setup Screener &nbsp;·&nbsp; <span style="font-size:0.72rem;opacity:0.7;">powered by Zerodha + yfinance</span></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
-        <span class="nav-badge">Mkt Cap &gt; ₹1000 Cr · Above 200 EMA</span>
+        <span class="nav-badge">Mkt Cap ₹1000 Cr – ₹50,000 Cr · Above 200 EMA</span>
         <span class="nav-badge">Top 15 setups · Backtest included</span>
     </div>
 </div>
@@ -352,10 +385,10 @@ def _write_formatted_excel(path, sheets):
                         c.fill = POS_FILL if fv > 0 else NEG_FILL
                     except (TypeError, ValueError):
                         pass
-                if col in ("Score /10", "Score"):
+                if col in ("Score /10", "Score /9", "Score"):
                     try:
                         sv = float(val)
-                        c.fill = SCR_HI if sv >= 8 else SCR_MED
+                        c.fill = SCR_HI if sv >= 7 else SCR_MED
                         c.font = Font(bold=True, size=10)
                     except (TypeError, ValueError):
                         pass
@@ -364,52 +397,64 @@ def _write_formatted_excel(path, sheets):
             ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
     wb.save(path)
 
-def _save_history(rows, top_n=15, keep_days=60):
+def _save_history(rows, top_n=15, keep_days=60, prefix="", sort_cols=None):
     if not rows:
         return
     d = _dt.date.today()
     while d.weekday() >= 5:
         d -= _dt.timedelta(days=1)
-    today = str(d)
+    today = prefix + str(d)
     hist_path = _os.path.join(_DIR, "history.xlsx")
 
-    df_new = (
-        pd.DataFrame(rows)
-        .sort_values(["Score /10", "Vol Ratio", "Mkt Cap (Cr)"], ascending=False)
-        .head(top_n)
-        .astype(str)
-    )
+    df = pd.DataFrame(rows)
+    if sort_cols is None:
+        sort_cols = ["Score /10", "Vol Ratio", "Mkt Cap (Cr)"]
+    valid_sort = [c for c in sort_cols if c in df.columns]
+    df_new = df.sort_values(valid_sort, ascending=False).head(top_n).astype(str)
 
-    # Load existing sheets
+    # Load existing sheets — keep only those matching the same prefix
     existing = {}
     if _os.path.exists(hist_path):
         try:
             xl = pd.ExcelFile(hist_path)
             for sheet in xl.sheet_names:
-                existing[sheet] = xl.parse(sheet, dtype=str)
+                if sheet.startswith(prefix):
+                    existing[sheet] = xl.parse(sheet, dtype=str)
         except Exception:
             pass
 
     existing[today] = df_new
 
-    # Keep last keep_days calendar days
+    # Keep last keep_days sheets for this prefix
     sorted_dates = sorted(existing.keys())[-keep_days:]
-    sheets = {d: existing[d] for d in sorted_dates}
+    sheets_this  = {d: existing[d] for d in sorted_dates}
+
+    # Merge with other-prefix sheets already in the file
+    all_sheets = {}
+    if _os.path.exists(hist_path):
+        try:
+            xl2 = pd.ExcelFile(hist_path)
+            for sheet in xl2.sheet_names:
+                if not sheet.startswith(prefix):
+                    all_sheets[sheet] = xl2.parse(sheet, dtype=str)
+        except Exception:
+            pass
+    all_sheets.update(sheets_this)
 
     try:
-        _write_formatted_excel(hist_path, sheets)
+        _write_formatted_excel(hist_path, all_sheets)
     except Exception:
         df_new.to_excel(hist_path, index=False)
 
 # ── Main UI ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-body">', unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["🚀 Screener", "📊 Backtest (Last 10 Days)"])
+tab1, tab4, tab5, tab2, tab3 = st.tabs(["🚀 Upside Setup", "🔍 Bottom Formation", "📦 Consolidation", "🏆 Top Performers", "📊 Backtest (Last 10 Days)"])
 
 # ── TAB 1: SCREENER ────────────────────────────────────────────────────────────
 with tab1:
     st.caption(
-        "Screens all NSE stocks (Mkt Cap > ₹1000 Cr, Price > 200 EMA) and finds stocks "
+        "Screens all NSE stocks (Mkt Cap ₹1000 Cr – ₹50,000 Cr, Price > 200 EMA) and finds stocks "
         "consolidating quietly — low volume, tight range, sellers absent — before the next leg up. "
         "Best for 1–7 day upside trades."
     )
@@ -451,7 +496,7 @@ with tab1:
             for mi, sym_ns in enumerate(ema200_pass):
                 prog_mc.progress((mi + 1) / len(ema200_pass), text=f"Market cap {mi+1}/{len(ema200_pass)}: {sym_ns}…")
                 mc = _get_mcap(sym_ns, mcap_data)
-                if 10_000_000_000 <= mc < 2_000_000_000_000:
+                if 10_000_000_000 <= mc < 500_000_000_000:
                     mcap_pass.append((sym_ns, mc))
                 if (mi + 1) % 50 == 0:
                     _save_json(_MCAP_CACHE, mcap_data)
@@ -659,8 +704,127 @@ with tab1:
         else:
             st.info("No stocks met all criteria right now. Try again at or after market close (3:30 PM IST).")
 
-# ── TAB 2: BACKTEST ────────────────────────────────────────────────────────────
+# ── TAB 2: TOP PERFORMERS ─────────────────────────────────────────────────────
 with tab2:
+    st.caption(
+        "Top 30 daily movers for each of the last 7 trading days — most recent date shown first. "
+        "Expand any date to see its full stock list with Change % and Price."
+    )
+
+    _daily_top_path = _os.path.join(_DIR, "dailyTop.xlsx")
+
+    if not _os.path.exists(_daily_top_path):
+        st.warning("No dailyTop.xlsx found. Run the daily script to generate it.")
+    else:
+        try:
+            xl_dt      = pd.ExcelFile(_daily_top_path)
+            all_sheets = sorted([s for s in xl_dt.sheet_names if s[:4].isdigit()])
+            last7      = all_sheets[-7:]          # oldest → newest
+            dates_desc = list(reversed(last7))    # newest → oldest for display
+
+            # ── Overall summary strip ─────────────────────────────────────────
+            # Collect a quick count per date so we can show badges
+            date_counts = {}
+            date_frames = {}
+            for d in last7:
+                df_d = xl_dt.parse(d)
+                df_d.columns = [str(c).strip() for c in df_d.columns]
+                df_d = df_d.dropna(subset=["Stock"]) if "Stock" in df_d.columns else df_d
+                date_frames[d] = df_d
+                date_counts[d] = len(df_d)
+
+            total_unique = len({
+                str(r).strip()
+                for df in date_frames.values()
+                for r in df.get("Stock", [])
+                if pd.notna(r)
+            })
+
+            sc1, sc2, sc3 = st.columns(3)
+            for col, label, val in [
+                (sc1, "Days Covered",   f"{len(last7)} trading days"),
+                (sc2, "Unique Stocks",  f"{total_unique} stocks"),
+                (sc3, "Period",         f"{last7[0]}  →  {last7[-1]}"),
+            ]:
+                col.markdown(
+                    f'<div style="background:white;border-left:3px solid #10b981;border-radius:7px;'
+                    f'padding:6px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.07);margin-bottom:6px;">'
+                    f'<div style="font-size:0.72rem;color:#64748b;text-transform:uppercase;'
+                    f'letter-spacing:0.05em;font-weight:600;">{label}</div>'
+                    f'<div style="font-size:1.0rem;font-weight:700;color:#0f172a;margin-top:2px;">{val}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown("")
+
+            # ── One expander per date, most recent expanded by default ────────
+            for i, d in enumerate(dates_desc):
+                df_day = date_frames.get(d, pd.DataFrame())
+                n      = date_counts.get(d, 0)
+
+                try:
+                    day_label = _dt.date.fromisoformat(d).strftime("%A, %d %b %Y")
+                except Exception:
+                    day_label = d
+
+                # Compute best and worst gainer for the header badge
+                badge_extra = ""
+                if not df_day.empty and "Change %" in df_day.columns:
+                    chg = pd.to_numeric(df_day["Change %"], errors="coerce").dropna()
+                    if len(chg):
+                        badge_extra = f"  ·  Top: +{chg.max():.2f}%  ·  Avg: +{chg.mean():.2f}%"
+
+                header = f"📅  {day_label}  —  {n} stocks{badge_extra}"
+                with st.expander(header, expanded=(i == 0)):
+                    if df_day.empty or "Stock" not in df_day.columns:
+                        st.info("No data for this date.")
+                        continue
+
+                    # Clean up and rank
+                    df_show = df_day.copy().reset_index(drop=True)
+                    df_show.index += 1
+
+                    # Format as strings so columns are left-aligned
+                    if "Change %" in df_show.columns:
+                        df_show["Change %"] = (
+                            pd.to_numeric(df_show["Change %"], errors="coerce")
+                            .apply(lambda x: f"{x:+.2f}%" if pd.notna(x) else "")
+                        )
+                    if "Price (₹)" in df_show.columns:
+                        df_show["Price (₹)"] = (
+                            pd.to_numeric(df_show["Price (₹)"], errors="coerce")
+                            .apply(lambda x: f"₹{x:,.2f}" if pd.notna(x) else "")
+                        )
+
+                    # Add TradingView chart link
+                    df_show["Chart"] = df_show["Stock"].apply(
+                        lambda s: f"https://www.tradingview.com/chart/?symbol=NSE:{s}"
+                    )
+
+                    # Keep only useful columns in a clean order
+                    keep = [c for c in ["Stock", "Change %", "Price (₹)", "Chart"] if c in df_show.columns]
+                    df_show = df_show[keep]
+
+                    col_cfg = {
+                        "Stock":     st.column_config.TextColumn("Stock"),
+                        "Change %":  st.column_config.TextColumn("Change %"),
+                        "Price (₹)": st.column_config.TextColumn("Price (₹)"),
+                        "Chart":     st.column_config.LinkColumn("Chart", display_text="📈 View"),
+                    }
+
+                    st.dataframe(
+                        df_show,
+                        use_container_width=True,
+                        height=min(850, 56 + len(df_show) * 35),
+                        column_config=col_cfg,
+                    )
+
+        except Exception as _tp_err:
+            st.error(f"Error loading dailyTop.xlsx: {_tp_err}")
+
+# ── TAB 3: BACKTEST ────────────────────────────────────────────────────────────
+with tab3:
     st.caption(
         "Checks how past screener picks performed over the next 1, 3, and 5 trading days. "
         "Uses the last 10 pick-dates from history.xlsx."
@@ -900,6 +1064,483 @@ with tab2:
             pass
 
         st.caption(f"📁 Saved to backtest_results.xlsx ({len(combined_bt)} total rows)")
+
+# ── TAB 4: BOTTOM FORMATION ────────────────────────────────────────────────────
+with tab4:
+    st.caption(
+        "Finds stocks that pulled back 20–55% from their peak, hit an oversold low, "
+        "and are now forming higher lows with RSI diverging upward — the N-pattern bottom "
+        "where the move up hasn't started yet. Similar to how SUNTV looked before its 40% run."
+    )
+
+    if st.button("🔍 Scan Bottom Formations", key="run_bottom"):
+        st.session_state.pop("bottom_data", None)
+        st.session_state["bottom_requested"] = True
+
+    if st.session_state.get("bottom_requested"):
+        if "bottom_data" not in st.session_state:
+            import yfinance as yf
+
+            mcap_data = _load_json(_MCAP_CACHE)
+            uc_data   = _load_json(_UNIVERSE_CACHE)
+            names_map = uc_data.get("names", {})
+
+            candidates = [
+                k for k, v in mcap_data.items()
+                if isinstance(v, dict) and 5_000_000_000 <= v.get("mcap", 0) < 500_000_000_000
+            ]
+
+            if not candidates:
+                st.warning("Mcap cache is empty — run the Screener tab first to populate it.")
+                st.session_state.pop("bottom_requested", None)
+                st.stop()
+
+            st.info(f"Scanning **{len(candidates)} stocks** for bottom formation setups…")
+
+            BATCH = 200
+            batches = [candidates[i:i+BATCH] for i in range(0, len(candidates), BATCH)]
+            prog = st.progress(0, text="Downloading price data…")
+            bottom_rows = []
+
+            for bi, batch in enumerate(batches):
+                prog.progress(
+                    (bi + 1) / len(batches),
+                    text=f"Batch {bi+1}/{len(batches)} — {len(bottom_rows)} setups found so far…"
+                )
+                try:
+                    dh = yf.download(batch, period="1y", auto_adjust=True,
+                                     progress=False, threads=True)
+                    if dh.empty:
+                        continue
+                    close = dh["Close"] if "Close" in dh else dh
+                    try: vol_df  = dh["Volume"]
+                    except: vol_df = None
+                    try: high_df = dh["High"]
+                    except: high_df = None
+                    try: low_df  = dh["Low"]
+                    except: low_df = None
+                    if isinstance(close, pd.Series):
+                        close = close.to_frame(name=batch[0])
+
+                    for sym_ns in batch:
+                        try:
+                            s = close[sym_ns].dropna()
+                            if len(s) < 100:
+                                continue
+                            c = list(s.astype(float))
+                            v = list(vol_df[sym_ns].dropna().astype(float))   if vol_df  is not None and sym_ns in vol_df.columns  else []
+                            h = list(high_df[sym_ns].dropna().astype(float))  if high_df is not None and sym_ns in high_df.columns else c
+                            l = list(low_df[sym_ns].dropna().astype(float))   if low_df  is not None and sym_ns in low_df.columns  else c
+
+                            price  = c[-1]
+                            high52 = max(h[-252:]) if len(h) >= 252 else max(h)
+                            low52  = min(l[-252:]) if len(l) >= 252 else min(l)
+
+                            # Pulled back 20–55% from 52-week high
+                            pct_off_high = (price - high52) / high52 * 100
+                            if not (-55 <= pct_off_high <= -20):
+                                continue
+
+                            # Bounced at least 7% off the 52-week low
+                            bounce_from_low = (price - low52) / low52 * 100
+                            if bounce_from_low < 7:
+                                continue
+
+                            # RSI in recovery zone
+                            rsi_now = _rsi_wilder(c)
+                            if not (40 <= rsi_now <= 65):
+                                continue
+
+                            # Find most recent significant low in last 60 days
+                            lookback_low = min(60, len(l) - 1)
+                            sub_l = l[-lookback_low:]
+                            recent_low_val     = min(sub_l)
+                            recent_low_sub_idx = len(sub_l) - 1 - sub_l[::-1].index(recent_low_val)
+                            days_since_low     = (len(sub_l) - 1) - recent_low_sub_idx
+                            recent_low_global  = len(c) - lookback_low + recent_low_sub_idx
+
+                            # RSI divergence vs that recent low
+                            rsi_at_low = _rsi_wilder(c[:recent_low_global + 1]) if recent_low_global >= 15 else 50
+                            rsi_div    = rsi_now - rsi_at_low
+                            if rsi_div < 5 or rsi_at_low >= 42:
+                                continue
+
+                            # Higher lows: floor rising
+                            if len(l) < 15:
+                                continue
+                            if not (l[-1] > l[-8] and min(l[-5:]) > l[-15]):
+                                continue
+
+                            # Volume drying up in base
+                            vol_dry = False
+                            if len(v) >= 30:
+                                avg_base  = sum(v[-15:]) / 15
+                                avg_prior = sum(v[-45:-15]) / 30 if len(v) >= 45 else sum(v[-30:-15]) / 15
+                                vol_dry   = avg_base < avg_prior * 0.85
+
+                            e200 = _ema_val(c, 200) if len(c) >= 200 else None
+                            pct_from_e200 = round((price - e200) / e200 * 100, 1) if e200 else None
+                            approaching_ema = e200 is not None and -12 <= pct_from_e200 <= 3
+
+                            score = sum([
+                                vol_dry,
+                                rsi_div > 15,
+                                bounce_from_low > 15,
+                                days_since_low <= 25,
+                                approaching_ema,
+                                rsi_now > 50,
+                                min(l[-5:]) > recent_low_val * 1.03,
+                                len(v) >= 5 and v[-1] > sum(v[-6:-1]) / 5,
+                                pct_off_high >= -35,
+                            ])
+
+                            if score < 3:
+                                continue
+
+                            mcap_cr = round(mcap_data[sym_ns]["mcap"] / 1e7)
+                            sym     = sym_ns.replace(".NS", "")
+                            bottom_rows.append({
+                                "Stock":           sym,
+                                "Company":         names_map.get(sym, sym),
+                                "Price (₹)":      round(price, 2),
+                                "% off Peak":      round(pct_off_high, 1),
+                                "Bounce from Low": round(bounce_from_low, 1),
+                                "RSI":             round(rsi_now, 1),
+                                "RSI at Low":      round(rsi_at_low, 1),
+                                "RSI Divergence":  round(rsi_div, 1),
+                                "Days Since Low":  days_since_low,
+                                "Vol Dry-up":      "✅" if vol_dry else "—",
+                                "% from 200 EMA":  pct_from_e200,
+                                "Score /9":        score,
+                                "Mkt Cap (Cr)":    mcap_cr,
+                                "Chart":           f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
+                            })
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+            prog.empty()
+            bottom_rows.sort(key=lambda x: x["Score /9"], reverse=True)
+            st.session_state["bottom_data"]    = bottom_rows
+            st.session_state["bottom_scanned"] = len(candidates)
+
+        bottom_rows = st.session_state.get("bottom_data", [])
+        scanned     = st.session_state.get("bottom_scanned", 0)
+
+        b1, b2, b3, b4 = st.columns(4)
+        for col, label, val in [
+            (b1, "Stocks Scanned",  f"{scanned:,}"),
+            (b2, "Setups Found",    f"{len(bottom_rows)}"),
+            (b3, "High Conviction", f"{sum(1 for r in bottom_rows if r['Score /9'] >= 7)} (Score ≥ 7)"),
+            (b4, "Vol Dry-up",      f"{sum(1 for r in bottom_rows if r['Vol Dry-up'] == '✅')} stocks"),
+        ]:
+            col.markdown(
+                f'<div style="background:white;border-left:3px solid #10b981;border-radius:7px;'
+                f'padding:6px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.07);margin-bottom:6px;">'
+                f'<div style="font-size:0.72rem;color:#64748b;text-transform:uppercase;'
+                f'letter-spacing:0.05em;font-weight:600;">{label}</div>'
+                f'<div style="font-size:1.0rem;font-weight:700;color:#0f172a;margin-top:2px;">{val}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("")
+
+        if bottom_rows:
+            df_bot = pd.DataFrame(bottom_rows).reset_index(drop=True)
+            df_bot.index += 1
+
+            st.dataframe(
+                df_bot,
+                use_container_width=True,
+                height=min(800, 56 + len(df_bot) * 35),
+                column_config={
+                    "Stock":           st.column_config.TextColumn("Stock",          pinned=True),
+                    "Company":         st.column_config.TextColumn("Company"),
+                    "Price (₹)":      st.column_config.NumberColumn("Price (₹)",     format="₹%.2f"),
+                    "% off Peak":      st.column_config.NumberColumn("% off Peak",    format="%.1f%%"),
+                    "Bounce from Low": st.column_config.NumberColumn("Bounce off Low",format="+%.1f%%"),
+                    "RSI":             st.column_config.NumberColumn("RSI Now",        format="%.1f"),
+                    "RSI at Low":      st.column_config.NumberColumn("RSI at Low",    format="%.1f"),
+                    "RSI Divergence":  st.column_config.NumberColumn("RSI Divergence",format="+%.1f"),
+                    "Days Since Low":  st.column_config.NumberColumn("Days Since Low",format="%d d"),
+                    "Vol Dry-up":      st.column_config.TextColumn("Vol Dry-up"),
+                    "% from 200 EMA":  st.column_config.NumberColumn("% from 200 EMA",format="%.1f%%"),
+                    "Score /9":        st.column_config.NumberColumn("Score /9",      format="%d ⭐"),
+                    "Mkt Cap (Cr)":    st.column_config.NumberColumn("Mkt Cap (Cr)",  format="₹%,d Cr"),
+                    "Chart":           st.column_config.LinkColumn("TradingView",     display_text="📈 Chart"),
+                },
+            )
+
+            with st.expander("ℹ️ How Bottom Formation scoring works"):
+                st.markdown("""
+**Filters applied:**
+- Pulled back 20–55% from 52-week high (in a real correction, not minor dip)
+- Bounced at least 7% off the 52-week low (base confirmed)
+- RSI was oversold (< 42) at the recent low, now recovering (40–65)
+- RSI today > RSI at the recent low (bullish divergence — key signal)
+- Higher lows: price floor rising over the last 2 weeks
+
+**Score /9 signals:**
+| Signal | What it means |
+|--------|--------------|
+| Vol Dry-up | Recent 15-day avg volume < 85% of prior 30-day avg — sellers leaving |
+| RSI Divergence > 15 | RSI recovered meaningfully (like Sun TV: from 32 → 61) |
+| Bounce > 15% | Strong initial move off the low |
+| Days Since Low ≤ 25 | Fresh bottom — move hasn't started yet |
+| Near 200 EMA (−12% to +3%) | Approaching the key trend line from below |
+| RSI > 50 | Momentum crossed into bullish territory |
+| Clear higher low | Last 5-day low > recent major low by > 3% |
+| Volume picking up today | Buyers stepping in |
+| Off peak by < 35% | Not too deep — recovery easier |
+
+**Score ≥ 7** = high conviction. **Score 5–6** = worth watching.
+""")
+        else:
+            st.info("No bottom formation setups found right now. Try again after market close.")
+
+# ── TAB 5: CONSOLIDATION ──────────────────────────────────────────────────────
+with tab5:
+    st.caption(
+        "Finds stocks that have been trading in a tight, narrowing range (coiling) for 2–4 weeks "
+        "while volume dries up — a Volatility Contraction Pattern (VCP) that typically precedes a "
+        "strong breakout. These are already in an uptrend, just pausing before the next leg up."
+    )
+
+    if st.button("📦 Scan Consolidation Setups", key="run_consol"):
+        st.session_state.pop("consol_data", None)
+        st.session_state["consol_requested"] = True
+
+    if st.session_state.get("consol_requested"):
+        if "consol_data" not in st.session_state:
+            import yfinance as yf
+
+            mcap_data = _load_json(_MCAP_CACHE)
+            uc_data   = _load_json(_UNIVERSE_CACHE)
+            names_map = uc_data.get("names", {})
+
+            candidates = [
+                k for k, v in mcap_data.items()
+                if isinstance(v, dict) and 5_000_000_000 <= v.get("mcap", 0) < 500_000_000_000
+            ]
+
+            if not candidates:
+                st.warning("Mcap cache is empty — run the Screener tab first to populate it.")
+                st.session_state.pop("consol_requested", None)
+                st.stop()
+
+            st.info(f"Scanning **{len(candidates)} stocks** for consolidation setups…")
+
+            BATCH = 200
+            batches = [candidates[i:i+BATCH] for i in range(0, len(candidates), BATCH)]
+            prog = st.progress(0, text="Downloading price data…")
+            consol_rows = []
+
+            for bi, batch in enumerate(batches):
+                prog.progress(
+                    (bi + 1) / len(batches),
+                    text=f"Batch {bi+1}/{len(batches)} — {len(consol_rows)} setups found so far…"
+                )
+                try:
+                    dh = yf.download(batch, period="1y", auto_adjust=True,
+                                     progress=False, threads=True)
+                    if dh.empty:
+                        continue
+                    close = dh["Close"] if "Close" in dh else dh
+                    try: vol_df  = dh["Volume"]
+                    except: vol_df = None
+                    try: high_df = dh["High"]
+                    except: high_df = None
+                    try: low_df  = dh["Low"]
+                    except: low_df = None
+                    if isinstance(close, pd.Series):
+                        close = close.to_frame(name=batch[0])
+
+                    for sym_ns in batch:
+                        try:
+                            s = close[sym_ns].dropna()
+                            if len(s) < 60:
+                                continue
+                            c = list(s.astype(float))
+                            v = list(vol_df[sym_ns].dropna().astype(float))   if vol_df  is not None and sym_ns in vol_df.columns  else []
+                            h = list(high_df[sym_ns].dropna().astype(float))  if high_df is not None and sym_ns in high_df.columns else c
+                            l = list(low_df[sym_ns].dropna().astype(float))   if low_df  is not None and sym_ns in low_df.columns  else c
+
+                            price = c[-1]
+                            e200  = _ema_val(c, 200) if len(c) >= 200 else None
+                            e50   = _ema_val(c, 50)
+                            e20   = _ema_val(c, 20)
+                            if not e50 or not e20:
+                                continue
+
+                            # Price above 50 EMA — in uptrend
+                            if price < e50:
+                                continue
+
+                            # RSI neutral/bullish — not overbought
+                            rsi = _rsi_wilder(c)
+                            if not (44 <= rsi <= 66):
+                                continue
+
+                            # Tight range over last 20 days (< 10%)
+                            if len(h) < 20 or len(l) < 20:
+                                continue
+                            range_20d = (max(h[-20:]) - min(l[-20:])) / price * 100
+                            if range_20d > 10:
+                                continue
+
+                            # Range over last 10 days
+                            range_10d   = (max(h[-10:]) - min(l[-10:])) / price * 100
+                            range_prev10 = (max(h[-20:-10]) - min(l[-20:-10])) / price * 100
+                            coiling     = range_10d < range_prev10
+
+                            # Volume drying up during consolidation
+                            vol_dry   = False
+                            vol_ratio = None
+                            if len(v) >= 40:
+                                avg_consol = sum(v[-20:]) / 20
+                                avg_prior  = sum(v[-40:-20]) / 20
+                                if avg_prior > 0:
+                                    vol_ratio = round(avg_consol / avg_prior, 2)
+                                    vol_dry   = avg_consol < avg_prior * 0.80
+
+                            # Stock was rising before consolidation
+                            prior_up = len(c) >= 45 and c[-20] > c[-45]
+
+                            # Not too far from 52-week high
+                            high52       = max(h[-252:]) if len(h) >= 252 else max(h)
+                            pct_from_high = (price - high52) / high52 * 100
+                            if pct_from_high < -25:
+                                continue
+
+                            # Price still holding above 20 EMA
+                            if price < e20 * 0.97:
+                                continue
+
+                            above_200        = e200 and price > e200
+                            at_ema_support   = (abs(price / e20 - 1) <= 0.02 or abs(price / e50 - 1) <= 0.02)
+                            consecutive_tight = range_10d < 5
+
+                            score = sum([
+                                vol_dry,
+                                coiling,
+                                consecutive_tight,
+                                prior_up,
+                                bool(above_200),
+                                rsi >= 52,
+                                at_ema_support,
+                                pct_from_high >= -10,
+                                len(v) >= 5 and v[-1] < sum(v[-6:-1]) / 5,
+                            ])
+
+                            if score < 4:
+                                continue
+
+                            pct_from_e200 = round((price - e200) / e200 * 100, 1) if e200 else None
+                            mcap_cr       = round(mcap_data[sym_ns]["mcap"] / 1e7)
+                            sym           = sym_ns.replace(".NS", "")
+                            consol_rows.append({
+                                "Stock":          sym,
+                                "Company":        names_map.get(sym, sym),
+                                "Price (₹)":     round(price, 2),
+                                "Range 20D %":    round(range_20d, 1),
+                                "Range 10D %":    round(range_10d, 1),
+                                "Coiling":        "✅" if coiling else "—",
+                                "RSI":            round(rsi, 1),
+                                "Vol Dry-up":     "✅" if vol_dry else "—",
+                                "Vol Ratio":      vol_ratio,
+                                "% from 200 EMA": pct_from_e200,
+                                "% from High":    round(pct_from_high, 1),
+                                "Score /9":       score,
+                                "Mkt Cap (Cr)":   mcap_cr,
+                                "Chart":          f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
+                            })
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+            prog.empty()
+            consol_rows.sort(key=lambda x: x["Score /9"], reverse=True)
+            st.session_state["consol_data"]    = consol_rows
+            st.session_state["consol_scanned"] = len(candidates)
+
+        consol_rows = st.session_state.get("consol_data", [])
+        scanned     = st.session_state.get("consol_scanned", 0)
+
+        c1, c2, c3, c4 = st.columns(4)
+        for col, label, val in [
+            (c1, "Stocks Scanned",  f"{scanned:,}"),
+            (c2, "Setups Found",    f"{len(consol_rows)}"),
+            (c3, "High Conviction", f"{sum(1 for r in consol_rows if r['Score /9'] >= 7)} (Score ≥ 7)"),
+            (c4, "Vol Dry-up",      f"{sum(1 for r in consol_rows if r['Vol Dry-up'] == '✅')} stocks"),
+        ]:
+            col.markdown(
+                f'<div style="background:white;border-left:3px solid #10b981;border-radius:7px;'
+                f'padding:6px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.07);margin-bottom:6px;">'
+                f'<div style="font-size:0.72rem;color:#64748b;text-transform:uppercase;'
+                f'letter-spacing:0.05em;font-weight:600;">{label}</div>'
+                f'<div style="font-size:1.0rem;font-weight:700;color:#0f172a;margin-top:2px;">{val}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("")
+
+        if consol_rows:
+            df_con = pd.DataFrame(consol_rows).reset_index(drop=True)
+            df_con.index += 1
+
+            st.dataframe(
+                df_con,
+                use_container_width=True,
+                height=min(800, 56 + len(df_con) * 35),
+                column_config={
+                    "Stock":          st.column_config.TextColumn("Stock",           pinned=True),
+                    "Company":        st.column_config.TextColumn("Company"),
+                    "Price (₹)":     st.column_config.NumberColumn("Price (₹)",      format="₹%.2f"),
+                    "Range 20D %":    st.column_config.NumberColumn("Range 20D",      format="%.1f%%"),
+                    "Range 10D %":    st.column_config.NumberColumn("Range 10D",      format="%.1f%%"),
+                    "Coiling":        st.column_config.TextColumn("Coiling"),
+                    "RSI":            st.column_config.NumberColumn("RSI",            format="%.1f"),
+                    "Vol Dry-up":     st.column_config.TextColumn("Vol Dry-up"),
+                    "Vol Ratio":      st.column_config.NumberColumn("Vol Ratio (Consol/Prior)", format="%.2fx"),
+                    "% from 200 EMA": st.column_config.NumberColumn("% from 200 EMA", format="%.1f%%"),
+                    "% from High":    st.column_config.NumberColumn("% from 52W High", format="%.1f%%"),
+                    "Score /9":       st.column_config.NumberColumn("Score /9",        format="%d ⭐"),
+                    "Mkt Cap (Cr)":   st.column_config.NumberColumn("Mkt Cap (Cr)",    format="₹%,d Cr"),
+                    "Chart":          st.column_config.LinkColumn("TradingView",        display_text="📈 Chart"),
+                },
+            )
+
+            with st.expander("ℹ️ How Consolidation scoring works"):
+                st.markdown("""
+**Filters applied:**
+- Price above 50 EMA — confirmed uptrend
+- RSI 44–66 — neutral/mild bullish, not overbought
+- Price range over last 20 days < 10% — actually consolidating (not trending)
+- Within 25% of 52-week high — at highs, not stuck in a downtrend
+- Price not below 20 EMA by more than 3% — still in base, not breaking down
+
+**Score /9 signals:**
+| Signal | What it means |
+|--------|--------------|
+| Vol Dry-up | Avg volume last 20d < 80% of prior 20d — sellers gone, base forming |
+| Coiling | Last 10-day range is smaller than prior 10-day range — spring tightening |
+| Very tight (< 5% range) | Extremely compressed last 10 days — maximum coiling |
+| Prior uptrend | Price was rising 20–45 days ago — this is a pause, not a drift |
+| Above 200 EMA | Long-term uptrend intact — strong backdrop |
+| RSI ≥ 52 | Momentum holding in bullish zone during base |
+| At EMA support | Sitting on 20 EMA or 50 EMA — natural launch pad |
+| Near 52W high (< 10% off) | Consolidating at highs — strongest possible position |
+| Today quiet | Today's volume below 5-day avg — base still being built |
+
+**Score ≥ 7** = high conviction coil. **Score 4–6** = worth watching.
+⚠️ For informational purposes only — not financial advice.
+""")
+        else:
+            st.info("No consolidation setups found right now. Try again after market close.")
 
 st.markdown("</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)

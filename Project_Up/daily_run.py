@@ -190,10 +190,10 @@ def _write_formatted_excel(path, sheets, streak_stocks=None):
                 else:
                     if ri % 2 == 0:
                         c.fill = ALT_FILL
-                    if col in ("Score /10", "Score"):
+                    if col in ("Score /10", "Score /9", "Score"):
                         try:
                             sv = float(val)
-                            c.fill = SCR_HI if sv >= 8 else SCR_MED
+                            c.fill = SCR_HI if sv >= 7 else SCR_MED
                             c.font = Font(bold=True, size=10)
                         except (TypeError, ValueError):
                             pass
@@ -202,40 +202,54 @@ def _write_formatted_excel(path, sheets, streak_stocks=None):
             ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
     wb.save(path)
 
-def _save_history(rows, top_n=15, keep_days=60):
+def _save_history(rows, top_n=15, keep_days=60, prefix="", sort_cols=None):
     if not rows:
         return
     d = datetime.date.today()
     while d.weekday() >= 5:
         d -= datetime.timedelta(days=1)
-    today = str(d)
+    today = prefix + str(d)
 
-    df_new = (
-        pd.DataFrame(rows)
-        .sort_values(["Score /10", "Vol Ratio", "Mkt Cap (Cr)"], ascending=False)
-        .head(top_n)
-        .astype(str)
-    )
+    df = pd.DataFrame(rows)
+    if sort_cols is None:
+        sort_cols = ["Score /10", "Vol Ratio", "Mkt Cap (Cr)"]
+    valid_sort = [c for c in sort_cols if c in df.columns]
+    df_new = df.sort_values(valid_sort, ascending=False).head(top_n).astype(str)
 
-    # Load existing sheets
+    # Load existing sheets — keep only those matching the same prefix
     existing = {}
     if os.path.exists(HIST_PATH):
         try:
             xl = pd.ExcelFile(HIST_PATH)
             for sheet in xl.sheet_names:
-                existing[sheet] = xl.parse(sheet, dtype=str)
+                if sheet.startswith(prefix):
+                    existing[sheet] = xl.parse(sheet, dtype=str)
         except Exception:
             pass
 
     existing[today] = df_new
 
-    # Keep last keep_days calendar days
+    # Keep last keep_days sheets for this prefix
     sorted_dates = sorted(existing.keys())[-keep_days:]
-    sheets = {d: existing[d] for d in sorted_dates}
+    sheets_this  = {d: existing[d] for d in sorted_dates}
 
-    streak_stocks = _find_streak_stocks(sheets, min_streak=2)
-    _write_formatted_excel(HIST_PATH, sheets, streak_stocks=streak_stocks)
-    _log(f"Saved {len(df_new)} rows to history.xlsx (sheet: {today}, {len(sheets)} dates stored)")
+    # Streak detection only for upside (plain date prefix)
+    streak_stocks = _find_streak_stocks(sheets_this, min_streak=2) if not prefix else None
+
+    # Merge with other-prefix sheets already in the file
+    all_sheets = {}
+    if os.path.exists(HIST_PATH):
+        try:
+            xl2 = pd.ExcelFile(HIST_PATH)
+            for sheet in xl2.sheet_names:
+                if not sheet.startswith(prefix):
+                    all_sheets[sheet] = xl2.parse(sheet, dtype=str)
+        except Exception:
+            pass
+    all_sheets.update(sheets_this)
+
+    _write_formatted_excel(HIST_PATH, all_sheets, streak_stocks=streak_stocks)
+    _log(f"Saved {len(df_new)} rows to history.xlsx (sheet: {today}, prefix='{prefix}', {len(sheets_this)} dates stored)")
 
 def _save_daily_top(all_close, names, top_n=30, keep_days=30):
     today = datetime.date.today()
@@ -252,8 +266,13 @@ def _save_daily_top(all_close, names, top_n=30, keep_days=30):
         if prev <= 0 or price < 10:
             continue
         chg_pct = round((price - prev) / prev * 100, 2)
+        # Skip data artefacts: yfinance dropna() can skip circuit-hit days,
+        # making c[-2] several sessions old and inflating the % change.
+        # India's standard daily circuit limit is ±20%.
+        if abs(chg_pct) > 20:
+            continue
         sym = sym_ns.replace(".NS", "")
-        rows.append({"Stock": sym, "Change %": chg_pct})
+        rows.append({"Stock": sym, "Change %": chg_pct, "Price (₹)": round(price, 2)})
 
     if not rows:
         _log("Daily Top: no data to save")
@@ -283,6 +302,290 @@ def _save_daily_top(all_close, names, top_n=30, keep_days=30):
 
     _write_formatted_excel(DAILY_TOP_PATH, sheets_to_save)
     _log(f"Daily Top saved → {DAILY_TOP_PATH}  ({len(sheets_to_save)} dates stored)")
+
+
+def _scan_bottom(all_close, all_high, all_low, all_vol, names, mcap_data):
+    """Run Bottom Formation scan and save top 20 to history with 'B-' prefix."""
+    rows = []
+    candidates = [
+        k for k, v in mcap_data.items()
+        if isinstance(v, dict) and 5_000_000_000 <= v.get("mcap", 0) < 500_000_000_000
+        and k in all_close
+    ]
+    _log(f"Bottom Formation scan: {len(candidates)} candidates")
+    for sym_ns in candidates:
+        try:
+            c = all_close[sym_ns]
+            h = all_high.get(sym_ns, c)
+            l = all_low.get(sym_ns, c)
+            v = all_vol.get(sym_ns, [])
+            if len(c) < 100 or len(h) < 15 or len(l) < 15:
+                continue
+            price  = c[-1]
+            high52 = max(h[-252:]) if len(h) >= 252 else max(h)
+            low52  = min(l[-252:]) if len(l) >= 252 else min(l)
+            pct_off_high = (price - high52) / high52 * 100
+            if not (-55 <= pct_off_high <= -20):
+                continue
+            bounce_from_low = (price - low52) / low52 * 100
+            if bounce_from_low < 7:
+                continue
+            rsi_now = _rsi_wilder(c)
+            if not (40 <= rsi_now <= 65):
+                continue
+            lookback_low       = min(60, len(l) - 1)
+            sub_l              = l[-lookback_low:]
+            recent_low_val     = min(sub_l)
+            recent_low_sub_idx = len(sub_l) - 1 - sub_l[::-1].index(recent_low_val)
+            days_since_low     = (len(sub_l) - 1) - recent_low_sub_idx
+            recent_low_global  = len(c) - lookback_low + recent_low_sub_idx
+            rsi_at_low = _rsi_wilder(c[:recent_low_global + 1]) if recent_low_global >= 15 else 50
+            rsi_div    = rsi_now - rsi_at_low
+            if rsi_div < 5 or rsi_at_low >= 42:
+                continue
+            if not (l[-1] > l[-8] and min(l[-5:]) > l[-15]):
+                continue
+            vol_dry = False
+            if len(v) >= 30:
+                avg_base  = sum(v[-15:]) / 15
+                avg_prior = sum(v[-45:-15]) / 30 if len(v) >= 45 else sum(v[-30:-15]) / 15
+                vol_dry   = avg_base < avg_prior * 0.85
+            e200 = _ema_val(c, 200) if len(c) >= 200 else None
+            pct_from_e200  = round((price - e200) / e200 * 100, 1) if e200 else None
+            approaching_ema = e200 is not None and -12 <= pct_from_e200 <= 3
+            score = sum([
+                vol_dry, rsi_div > 15, bounce_from_low > 15, days_since_low <= 25,
+                approaching_ema, rsi_now > 50, min(l[-5:]) > recent_low_val * 1.03,
+                len(v) >= 5 and v[-1] > sum(v[-6:-1]) / 5, pct_off_high >= -35,
+            ])
+            if score < 3:
+                continue
+            sym = sym_ns.replace(".NS", "")
+            rows.append({
+                "Stock":           sym,
+                "Company":         names.get(sym, sym),
+                "Price (₹)":      round(price, 2),
+                "% off Peak":      round(pct_off_high, 1),
+                "Bounce from Low": round(bounce_from_low, 1),
+                "RSI":             round(rsi_now, 1),
+                "RSI at Low":      round(rsi_at_low, 1),
+                "RSI Divergence":  round(rsi_div, 1),
+                "Days Since Low":  days_since_low,
+                "Vol Dry-up":      "Yes" if vol_dry else "No",
+                "% from 200 EMA":  pct_from_e200,
+                "Score /9":        score,
+                "Mkt Cap (Cr)":    round(mcap_data[sym_ns]["mcap"] / 1e7),
+            })
+        except Exception:
+            pass
+    _log(f"Bottom Formation: {len(rows)} setups found")
+    return rows
+
+
+def _scan_consol(all_close, all_high, all_low, all_vol, names, mcap_data):
+    """Run Consolidation scan and save top 20 to history with 'C-' prefix."""
+    rows = []
+    candidates = [
+        k for k, v in mcap_data.items()
+        if isinstance(v, dict) and 5_000_000_000 <= v.get("mcap", 0) < 500_000_000_000
+        and k in all_close
+    ]
+    _log(f"Consolidation scan: {len(candidates)} candidates")
+    for sym_ns in candidates:
+        try:
+            c = all_close[sym_ns]
+            h = all_high.get(sym_ns, c)
+            l = all_low.get(sym_ns, c)
+            v = all_vol.get(sym_ns, [])
+            if len(c) < 60 or len(h) < 20 or len(l) < 20:
+                continue
+            price = c[-1]
+            e50   = _ema_val(c, 50)
+            e20   = _ema_val(c, 20)
+            e200  = _ema_val(c, 200) if len(c) >= 200 else None
+            if not e50 or not e20:
+                continue
+            if price < e50:
+                continue
+            rsi = _rsi_wilder(c)
+            if not (44 <= rsi <= 66):
+                continue
+            range_20d = (max(h[-20:]) - min(l[-20:])) / price * 100
+            if range_20d > 10:
+                continue
+            range_10d    = (max(h[-10:]) - min(l[-10:])) / price * 100
+            range_prev10 = (max(h[-20:-10]) - min(l[-20:-10])) / price * 100
+            coiling      = range_10d < range_prev10
+            vol_dry = False
+            if len(v) >= 40:
+                avg_consol = sum(v[-20:]) / 20
+                avg_prior  = sum(v[-40:-20]) / 20
+                vol_dry    = avg_prior > 0 and avg_consol < avg_prior * 0.80
+            prior_up      = len(c) >= 45 and c[-20] > c[-45]
+            high52        = max(h[-252:]) if len(h) >= 252 else max(h)
+            pct_from_high = (price - high52) / high52 * 100
+            if pct_from_high < -25:
+                continue
+            if price < e20 * 0.97:
+                continue
+            above_200         = e200 and price > e200
+            at_ema_support    = (abs(price / e20 - 1) <= 0.02 or abs(price / e50 - 1) <= 0.02)
+            consecutive_tight = range_10d < 5
+            score = sum([
+                vol_dry, coiling, consecutive_tight, prior_up, bool(above_200),
+                rsi >= 52, at_ema_support, pct_from_high >= -10,
+                len(v) >= 5 and v[-1] < sum(v[-6:-1]) / 5,
+            ])
+            if score < 4:
+                continue
+            pct_from_e200 = round((price - e200) / e200 * 100, 1) if e200 else None
+            sym = sym_ns.replace(".NS", "")
+            rows.append({
+                "Stock":          sym,
+                "Company":        names.get(sym, sym),
+                "Price (₹)":     round(price, 2),
+                "Range 20D %":    round(range_20d, 1),
+                "Range 10D %":    round(range_10d, 1),
+                "Coiling":        "Yes" if coiling else "No",
+                "RSI":            round(rsi, 1),
+                "Vol Dry-up":     "Yes" if vol_dry else "No",
+                "% from 200 EMA": pct_from_e200,
+                "% from High":    round(pct_from_high, 1),
+                "Score /9":       score,
+                "Mkt Cap (Cr)":   round(mcap_data[sym_ns]["mcap"] / 1e7),
+            })
+        except Exception:
+            pass
+    _log(f"Consolidation: {len(rows)} setups found")
+    return rows
+
+
+def _write_section(ws, title, rows, row_start, sec_color):
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    if not rows:
+        return row_start
+
+    HDR_FILL = PatternFill("solid", fgColor="1D4ED8")
+    HDR_FONT = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL = PatternFill("solid", fgColor="EFF6FF")
+    SCR_HI   = PatternFill("solid", fgColor="D1FAE5")
+    SCR_MED  = PatternFill("solid", fgColor="FEF9C3")
+    THIN     = Side(style="thin", color="E2E8F0")
+    BORDER   = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER   = Alignment(horizontal="center", vertical="center")
+    SEC_FILL = PatternFill("solid", fgColor=sec_color)
+
+    cols = [c for c in rows[0].keys() if c != "Chart"]
+    n    = len(cols)
+
+    # Section heading (merged across all columns)
+    ws.merge_cells(start_row=row_start, start_column=1, end_row=row_start, end_column=n)
+    c = ws.cell(row=row_start, column=1, value=f"  {title}")
+    c.fill = SEC_FILL
+    c.font = Font(color="FFFFFF", bold=True, size=11)
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[row_start].height = 24
+    row_start += 1
+
+    # Column headers
+    for ci, col in enumerate(cols, 1):
+        c = ws.cell(row=row_start, column=ci, value=col)
+        c.fill = HDR_FILL; c.font = HDR_FONT
+        c.alignment = CENTER; c.border = BORDER
+    ws.row_dimensions[row_start].height = 20
+    row_start += 1
+
+    # Data rows
+    for ri, row in enumerate(rows):
+        for ci, col in enumerate(cols, 1):
+            val = row.get(col)
+            c = ws.cell(row=row_start, column=ci, value=val)
+            c.border = BORDER; c.alignment = CENTER
+            if ri % 2 == 0:
+                c.fill = ALT_FILL
+            if col in ("Score /10", "Score /9"):
+                try:
+                    sv = float(val)
+                    c.fill = SCR_HI if sv >= 7 else SCR_MED
+                    c.font = Font(bold=True, size=10)
+                except (TypeError, ValueError):
+                    pass
+        ws.row_dimensions[row_start].height = 18
+        row_start += 1
+
+    # Auto-fit column widths
+    data_start = row_start - len(rows) - 1
+    for ci, col in enumerate(cols, 1):
+        ml = max(
+            (len(str(ws.cell(r, ci).value or "")) for r in range(data_start, row_start)),
+            default=8,
+        )
+        ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 30)
+
+    return row_start + 1  # blank separator
+
+
+def _save_combined_history(upside_rows, bottom_rows, consol_rows, keep_days=60):
+    from openpyxl import load_workbook, Workbook
+
+    d = datetime.date.today()
+    while d.weekday() >= 5:
+        d -= datetime.timedelta(days=1)
+    today = str(d)
+
+    # Load or create workbook
+    if os.path.exists(HIST_PATH):
+        try:
+            wb = load_workbook(HIST_PATH)
+        except Exception:
+            wb = Workbook()
+    else:
+        wb = Workbook()
+
+    # Remove default empty sheet created by Workbook()
+    for s in list(wb.sheetnames):
+        ws = wb[s]
+        if ws.max_row == 1 and ws.max_column == 1 and ws["A1"].value is None:
+            del wb[s]
+            break
+
+    # Remove today's sheet + old B-/C- prefixed sheets from previous format
+    for name in list(wb.sheetnames):
+        if name == today or name.startswith("B-") or name.startswith("C-"):
+            del wb[name]
+
+    # Sort results
+    u_rows = sorted(upside_rows, key=lambda x: (x.get("Score /10", 0), x.get("Vol Ratio", 0)), reverse=True)[:15]
+    b_rows = sorted(bottom_rows, key=lambda x:  x.get("Score /9",  0), reverse=True)[:20]
+    c_rows = sorted(consol_rows, key=lambda x:  x.get("Score /9",  0), reverse=True)[:20]
+
+    ws = wb.create_sheet(title=today)
+    ws.freeze_panes = "A2"
+
+    row = 1
+    row = _write_section(ws, f"UPSIDE SETUP  ({len(u_rows)} stocks)",       u_rows, row, "052e16")
+    row = _write_section(ws, f"BOTTOM FORMATION  ({len(b_rows)} stocks)",   b_rows, row, "1e3a5f")
+    row = _write_section(ws, f"CONSOLIDATION  ({len(c_rows)} stocks)",      c_rows, row, "3b1f5e")
+
+    # Keep only last keep_days date sheets
+    def _is_plain_date(name):
+        try:
+            datetime.date.fromisoformat(name)
+            return True
+        except ValueError:
+            return False
+
+    date_sheets = sorted(s for s in wb.sheetnames if _is_plain_date(s))
+    for old in date_sheets[:-keep_days]:
+        del wb[old]
+
+    wb.save(HIST_PATH)
+    _log(
+        f"Combined history saved → {today}  "
+        f"(Upside: {len(u_rows)}, Bottom: {len(b_rows)}, Consol: {len(c_rows)})"
+    )
 
 
 def run():
@@ -445,7 +748,6 @@ def run():
             pass
 
     _log(f"Scoring complete: {len(rows)} stocks qualify (score ≥ 5)")
-    _save_history(rows)
 
     top = sorted(rows, key=lambda r: (r["Score /10"], r["Vol Ratio"]), reverse=True)[:15]
     _log("Top 15 picks:")
@@ -454,6 +756,13 @@ def run():
 
     # ── Step 6: Top 30 daily movers ───────────────────────────────────────────
     _save_daily_top(all_close, names)
+
+    # ── Step 7 & 8: Bottom Formation + Consolidation scans ────────────────────
+    bottom_rows = _scan_bottom(all_close, all_high, all_low, all_vol, names, mcap_data)
+    consol_rows = _scan_consol(all_close, all_high, all_low, all_vol, names, mcap_data)
+
+    # ── Step 9: Save all 3 results to one combined sheet in history.xlsx ──────
+    _save_combined_history(rows, bottom_rows, consol_rows)
 
 if __name__ == "__main__":
     try:

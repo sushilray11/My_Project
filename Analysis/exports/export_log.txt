@@ -133,3 +133,153 @@
 [15:00:17] Consolidation Breakout: 1 candidates
 [15:00:19] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-09-24)
 [15:00:19] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:06] NSE F&O Daily Export starting…
+[15:00:06] F&O list: 209 stocks (Cache (fresh))
+[15:00:06] Downloading 1Y price history for all stocks…
+[15:00:17] Download complete. Running screeners…
+[15:00:18] Probable Upside:        15 candidates
+[15:00:18] Support Entry:          15 candidates
+[15:00:18] Consolidation Breakout: 1 candidates
+[15:00:20] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-09-28)
+[15:00:20] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] NSE F&O Daily Export starting…
+[15:00:05] F&O list: 209 stocks (Cache (fresh))
+[15:00:05] Downloading 1Y price history for all stocks…
+[15:00:11] Download complete. Running screeners…
+[15:00:12] Probable Upside:        13 candidates
+[15:00:12] Support Entry:          15 candidates
+[15:00:12] Consolidation Breakout: 1 candidates
+[15:00:14] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-09-29)
+[15:00:14] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] NSE F&O Daily Export starting…
+[15:00:05] F&O list: 209 stocks (Cache (fresh))
+[15:00:05] Downloading 1Y price history for all stocks…
+[15:00:14] Download complete. Running screeners…
+[15:00:14] Probable Upside:        7 candidates
+[15:00:14] Support Entry:          15 candidates
+Traceback (most recent call last):
+  File "/Users/I325211/Local_Project/Analysis/daily_export.py", line 970, in <module>
+    df3 = run_consolidation(FNO, close_df, high_df, low_df, vol_df)
+  File "/Users/I325211/Local_Project/Analysis/daily_export.py", line 662, in run_consolidation
+    df = (pd.DataFrame(rows)
+  File "/Users/I325211/Library/Python/3.9/lib/python/site-packages/pandas/core/frame.py", line 7194, in sort_values
+    keys = [self._get_label_or_level_values(x, axis=axis) for x in by]
+  File "/Users/I325211/Library/Python/3.9/lib/python/site-packages/pandas/core/frame.py", line 7194, in <listcomp>
+    keys = [self._get_label_or_level_values(x, axis=axis) for x in by]
+  File "/Users/I325211/Library/Python/3.9/lib/python/site-packages/pandas/core/generic.py", line 1914, in _get_label_or_level_values
+    raise KeyError(key)
+KeyError: 'Score /10'
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:08] NSE F&O Daily Export starting…
+[15:00:09] F&O list: 212 stocks (Zerodha Live)
+[15:00:09] Downloading 1Y price history for all stocks…
+[15:00:17] Download complete. Running screeners…
+[15:00:17] Probable Upside:        5 candidates
+[15:00:18] Support Entry:          15 candidates
+Traceback (most recent call last):
+  File "/Users/I325211/Local_Project/Analysis/daily_export.py", line 970, in <module>
+    df3 = run_consolidation(FNO, close_df, high_df, low_df, vol_df)
+  File "/Users/I325211/Local_Project/Analysis/daily_export.py", line 662, in run_consolidation
+    df = (pd.DataFrame(rows)
+  File "/Users/I325211/Library/Python/3.9/lib/python/site-packages/pandas/core/frame.py", line 7194, in sort_values
+    keys = [self._get_label_or_level_values(x, axis=axis) for x in by]
+  File "/Users/I325211/Library/Python/3.9/lib/python/site-packages/pandas/core/frame.py", line 7194, in <listcomp>
+    keys = [self._get_label_or_level_values(x, axis=axis) for x in by]
+  File "/Users/I325211/Library/Python/3.9/lib/python/site-packages/pandas/core/generic.py", line 1914, in _get_label_or_level_values
+    raise KeyError(key)
+KeyError: 'Score /10'
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] NSE F&O Daily Export starting…
+[15:00:05] F&O list: 212 stocks (Cache (fresh))
+[15:00:05] Downloading 1Y price history for all stocks…
+[15:00:16] Download complete. Running screeners…
+[15:00:16] Probable Upside:        3 candidates
+[15:00:17] Support Entry:          15 candidates
+[15:00:17] Consolidation Breakout: 0 candidates
+[15:00:19] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-05)
+[15:00:19] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] NSE F&O Daily Export starting…
+[15:00:05] F&O list: 212 stocks (Cache (fresh))
+[15:00:05] Downloading 1Y price history for all stocks…
+[15:00:15] Download complete. Running screeners…
+[15:00:15] Probable Upside:        6 candidates
+[15:00:15] Support Entry:          15 candidates
+[15:00:15] Consolidation Breakout: 0 candidates
+[15:00:17] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-06)
+[15:00:18] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:07] NSE F&O Daily Export starting…
+[15:00:07] F&O list: 212 stocks (Cache (fresh))
+[15:00:07] Downloading 1Y price history for all stocks…
+[15:00:17] Download complete. Running screeners…
+[15:00:18] Probable Upside:        12 candidates
+[15:00:18] Support Entry:          15 candidates
+[15:00:18] Consolidation Breakout: 1 candidates
+[15:00:20] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-07)
+[15:00:20] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] NSE F&O Daily Export starting…
+[15:00:05] F&O list: 212 stocks (Cache (fresh))
+[15:00:05] Downloading 1Y price history for all stocks…
+[15:00:19] Download complete. Running screeners…
+[15:00:19] Probable Upside:        7 candidates
+[15:00:19] Support Entry:          15 candidates
+[15:00:19] Consolidation Breakout: 1 candidates
+[15:00:22] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-09)
+[15:00:22] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:04:06] NSE F&O Daily Export starting…
+[15:04:06] F&O list: 212 stocks (Cache (fresh))
+[15:04:06] Downloading 1Y price history for all stocks…
+[15:04:21] Download complete. Running screeners…
+[15:04:21] Probable Upside:        15 candidates
+[15:04:21] Support Entry:          15 candidates
+[15:04:21] Consolidation Breakout: 1 candidates
+[15:04:24] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-12)
+[15:04:24] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] NSE F&O Daily Export starting…
+[15:00:05] F&O list: 212 stocks (Cache (fresh))
+[15:00:05] Downloading 1Y price history for all stocks…
+[15:00:14] Download complete. Running screeners…
+[15:00:15] Probable Upside:        15 candidates
+[15:00:15] Support Entry:          15 candidates
+[15:00:15] Consolidation Breakout: 0 candidates
+[15:00:17] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-13)
+[15:00:17] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:07] NSE F&O Daily Export starting…
+[15:00:07] F&O list: 212 stocks (Cache (fresh))
+[15:00:07] Downloading 1Y price history for all stocks…
+[15:00:16] Download complete. Running screeners…
+[15:00:16] Probable Upside:        15 candidates
+[15:00:17] Support Entry:          15 candidates
+[15:00:17] Consolidation Breakout: 1 candidates
+[15:00:20] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-15)
+[15:00:20] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:06] NSE F&O Daily Export starting…
+[15:00:06] F&O list: 212 stocks (Cache (fresh))
+[15:00:06] Downloading 1Y price history for all stocks…
+[15:00:16] Download complete. Running screeners…
+[15:00:17] Probable Upside:        15 candidates
+[15:00:17] Support Entry:          15 candidates
+[15:00:17] Consolidation Breakout: 0 candidates
+[15:00:19] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-16)
+[15:00:19] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx

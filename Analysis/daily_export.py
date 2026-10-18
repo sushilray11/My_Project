@@ -659,10 +659,11 @@ def run_consolidation(fno, close_df, high_df, low_df, vol_df):
                 })
         except Exception:
             pass
-    df = (pd.DataFrame(rows)
-          .sort_values(["Score /10", "Days Consol.", "10D Range %"],
-                       ascending=[False, False, True])
-          .head(15).reset_index(drop=True))
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = (df.sort_values(["Score /10", "Days Consol.", "10D Range %"],
+                             ascending=[False, False, True])
+                .head(15).reset_index(drop=True))
     df.index += 1
     return df
 
