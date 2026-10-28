@@ -276,7 +276,7 @@ _COMPANY_NAMES = {
     "ASHOKLEY":"Ashok Leyland","ASIANPAINT":"Asian Paints","ASTRAL":"Astral",
     "AUROPHARMA":"Aurobindo Pharma","AUBANK":"AU Small Finance Bank","DMART":"Avenue Supermarts (D-Mart)",
     "AXISBANK":"Axis Bank","BAJAJ-AUTO":"Bajaj Auto","BAJAJFINSV":"Bajaj Finserv",
-    "BAJFINANCE":"Bajaj Finance","BAJAJHLDNG":"Bajaj Holdings","BANDHANBNK":"Bandhan Bank",
+    "BAJFINANCE":"Bajaj Finance","BANDHANBNK":"Bandhan Bank",
     "BANKBARODA":"Bank of Baroda","BANKINDIA":"Bank of India","BHARTIARTL":"Bharti Airtel",
     "BDL":"Bharat Dynamics","BEL":"Bharat Electronics","BHARATFORG":"Bharat Forge",
     "INDUSTOWER":"Indus Towers","BPCL":"BPCL","BHEL":"BHEL","BIOCON":"Biocon",
@@ -296,7 +296,7 @@ _COMPANY_NAMES = {
     "HDFCLIFE":"HDFC Life Insurance","HEROMOTOCO":"Hero MotoCorp","HAL":"Hindustan Aeronautics (HAL)",
     "HINDALCO":"Hindalco Industries","HINDUNILVR":"Hindustan Unilever","HINDPETRO":"HPCL",
     "HINDZINC":"Hindustan Zinc","HYUNDAI":"Hyundai Motor India","ICICIBANK":"ICICI Bank",
-    "ICICIGI":"ICICI Lombard GI","ICICIPRULI":"ICICI Prudential Life","IDEA":"Vodafone Idea",
+    "ICICIGI":"ICICI Lombard GI","IDEA":"Vodafone Idea",
     "IDFCFIRSTB":"IDFC First Bank","360ONE":"360 ONE WAM","INDUSINDBK":"IndusInd Bank",
     "IEX":"Indian Energy Exchange","INDHOTEL":"Indian Hotels (Taj)","INDIANB":"Indian Bank",
     "IOC":"Indian Oil Corp","IRFC":"IRFC","IREDA":"IREDA","NAUKRI":"Info Edge (Naukri)",
@@ -314,7 +314,7 @@ _COMPANY_NAMES = {
     "MOTHERSON":"Motherson Sumi Systems","MPHASIS":"Mphasis","MUTHOOTFIN":"Muthoot Finance",
     "NATIONALUM":"National Aluminium","NMDC":"NMDC","NBCC":"NBCC India",
     "NESTLEIND":"Nestlé India","NHPC":"NHPC","COFORGE":"Coforge","NTPC":"NTPC",
-    "OBEROIRLTY":"Oberoi Realty","DALBHARAT":"Dalmia Bharat","OIL":"Oil India",
+    "OBEROIRLTY":"Oberoi Realty","OIL":"Oil India",
     "PAYTM":"Paytm (One 97 Communications)","ONGC":"ONGC","OFSS":"Oracle Financial Services",
     "PAGEIND":"Page Industries","POLICYBZR":"PB Fintech (Policybazaar)",
     "PERSISTENT":"Persistent Systems","PETRONET":"Petronet LNG","PGEL":"PG Electroplast",
@@ -329,7 +329,7 @@ _COMPANY_NAMES = {
     "SONACOMS":"Sona BLW Precision Forgings","SRF":"SRF","SBIN":"State Bank of India",
     "SUNPHARMA":"Sun Pharma","SUPREMEIND":"Supreme Industries","SUZLON":"Suzlon Energy",
     "SWIGGY":"Swiggy","TATAELXSI":"Tata Elxsi","TATACONSUM":"Tata Consumer Products",
-    "TATAMOTORS":"Tata Motors","TATAPOWER":"Tata Power","TATASTEEL":"Tata Steel",
+    "TATAPOWER":"Tata Power","TATASTEEL":"Tata Steel",
     "TCS":"Tata Consultancy Services","TECHM":"Tech Mahindra","TITAN":"Titan Company",
     "TORNTPHARM":"Torrent Pharmaceuticals","TRENT":"Trent","TIINDIA":"Tube Investments of India",
     "TVSMOTOR":"TVS Motor","ULTRACEMCO":"UltraTech Cement","UNIONBANK":"Union Bank of India",
@@ -337,6 +337,11 @@ _COMPANY_NAMES = {
     "VMM":"Vishal Mega Mart","VOLTAS":"Voltas","WAAREEENER":"Waaree Energies","WIPRO":"Wipro",
     "YESBANK":"Yes Bank","ETERNAL":"Eternal (Zomato)",
     "ATHERENERG":"Ather Energy","MAHABANK":"Bank of Maharashtra","SAGILITY":"Sagility India",
+    "ANANDRATHI":"Anand Rathi Wealth","ENRIN":"Siemens Energy India",
+    "ICICILIFE":"ICICI Life Insurance","UJJIVANSFB":"Ujjivan Small Finance Bank",
+    "COROMANDEL":"Coromandel International","CUB":"City Union Bank",
+    "DATAPATTNS":"Data Patterns India","KARURVYSYA":"Karur Vysya Bank",
+    "NAVINFLUOR":"Navin Fluorine International","SYRMA":"Syrma SGS Technology",
 }
 
 # NSE index symbols to exclude from F&O stock list
@@ -484,14 +489,14 @@ _SECTOR = {
     # Financial Services
     "ABCAPITAL":"Financial Services","AXISBANK":"Financial Services",
     "BAJAJFINSV":"Financial Services","BAJFINANCE":"Financial Services",
-    "BAJAJHLDNG":"Financial Services","BANDHANBNK":"Financial Services",
+    "BANDHANBNK":"Financial Services",
     "BANKBARODA":"Financial Services","BANKINDIA":"Financial Services",
     "BSE":"Financial Services","CAMS":"Financial Services",
     "CANBK":"Financial Services","CDSL":"Financial Services",
     "CHOLAFIN":"Financial Services","HDFCAMC":"Financial Services",
     "HDFCBANK":"Financial Services","HDFCLIFE":"Financial Services",
     "ICICIBANK":"Financial Services","ICICIGI":"Financial Services",
-    "ICICIPRULI":"Financial Services","IDFCFIRSTB":"Financial Services",
+    "IDFCFIRSTB":"Financial Services",
     "IEX":"Financial Services","INDUSINDBK":"Financial Services",
     "INDIANB":"Financial Services","IRFC":"Financial Services",
     "JIOFIN":"Financial Services","KFINTECH":"Financial Services",
@@ -506,10 +511,15 @@ _SECTOR = {
     "SBILIFE":"Financial Services","SHRIRAMFIN":"Financial Services",
     "SBIN":"Financial Services","UNIONBANK":"Financial Services",
     "YESBANK":"Financial Services","360ONE":"Financial Services",
+    "ANGELONE":"Financial Services","AUBANK":"Financial Services",
+    "FEDERALBNK":"Financial Services","MCX":"Financial Services",
+    "ANANDRATHI":"Financial Services","ICICILIFE":"Financial Services",
+    "UJJIVANSFB":"Financial Services","CUB":"Financial Services",
+    "KARURVYSYA":"Financial Services",
     # Information Technology
     "HCLTECH":"IT","INFY":"IT","KPITTECH":"IT","LTM":"IT",
     "MPHASIS":"IT","OFSS":"IT","PERSISTENT":"IT","TECHM":"IT",
-    "TCS":"IT","WIPRO":"IT","COFORGE":"IT","TATAELXSI":"IT",
+    "TCS":"IT","WIPRO":"IT","COFORGE":"IT","TATAELXSI":"IT","NAUKRI":"IT",
     # Pharma
     "ALKEM":"Pharma","AUROPHARMA":"Pharma","BIOCON":"Pharma",
     "CIPLA":"Pharma","DIVISLAB":"Pharma","DRREDDY":"Pharma",
@@ -519,8 +529,8 @@ _SECTOR = {
     # Automobile
     "ASHOKLEY":"Automobile","BAJAJ-AUTO":"Automobile","EICHERMOT":"Automobile",
     "FORCEMOT":"Automobile","HEROMOTOCO":"Automobile","M&M":"Automobile",
-    "MARUTI":"Automobile","TATAMOTORS":"Automobile","TVSMOTOR":"Automobile",
-    "UNOMINDA":"Automobile","MOTHERSON":"Automobile",
+    "MARUTI":"Automobile","TVSMOTOR":"Automobile",
+    "UNOMINDA":"Automobile","MOTHERSON":"Automobile","HYUNDAI":"Automobile",
     # Capital Goods
     "ABB":"Capital Goods","BDL":"Capital Goods","BEL":"Capital Goods",
     "BHARATFORG":"Capital Goods","BLUESTARCO":"Capital Goods",
@@ -531,10 +541,14 @@ _SECTOR = {
     "KAYNES":"Capital Goods","PGEL":"Capital Goods","SONACOMS":"Capital Goods",
     "GVT&D":"Capital Goods","POWERINDIA":"Capital Goods","AMBER":"Capital Goods",
     "APLAPOLLO":"Capital Goods","SOLARINDS":"Capital Goods",
+    "LT":"Capital Goods","BHEL":"Capital Goods","SUPREMEIND":"Capital Goods",
+    "ASTRAL":"Capital Goods","ENRIN":"Capital Goods",
+    "DATAPATTNS":"Capital Goods","SYRMA":"Capital Goods",
     # Chemicals
     "PIDILITIND":"Chemicals","PIIND":"Chemicals","SRF":"Chemicals","UPL":"Chemicals",
+    "NAVINFLUOR":"Chemicals","COROMANDEL":"Chemicals",
     # Cement
-    "AMBUJACEM":"Cement","DALBHARAT":"Cement","SHREECEM":"Cement",
+    "AMBUJACEM":"Cement","SHREECEM":"Cement",
     "ULTRACEMCO":"Cement","GRASIM":"Cement",
     # Consumer Goods
     "BRITANNIA":"Consumer Goods","COLPAL":"Consumer Goods","DABUR":"Consumer Goods",
@@ -544,6 +558,8 @@ _SECTOR = {
     "RADICO":"Consumer Goods","TITAN":"Consumer Goods","TATACONSUM":"Consumer Goods",
     "UNITDSPR":"Consumer Goods","VBL":"Consumer Goods","KALYANKJIL":"Consumer Goods",
     "HINDUNILVR":"Consumer Goods","CROMPTON":"Consumer Goods",
+    "ASIANPAINT":"Consumer Goods","INDHOTEL":"Consumer Goods",
+    "TRENT":"Consumer Goods","VMM":"Consumer Goods",
     # Metals & Mining
     "HINDALCO":"Metals & Mining","HINDZINC":"Metals & Mining","JSWSTEEL":"Metals & Mining",
     "JINDALSTEL":"Metals & Mining","NATIONALUM":"Metals & Mining","NMDC":"Metals & Mining",
@@ -551,6 +567,7 @@ _SECTOR = {
     # Oil & Gas
     "BPCL":"Oil & Gas","GAIL":"Oil & Gas","HINDPETRO":"Oil & Gas",
     "IOC":"Oil & Gas","OIL":"Oil & Gas","ONGC":"Oil & Gas","PETRONET":"Oil & Gas",
+    "RELIANCE":"Oil & Gas","COALINDIA":"Metals & Mining",
     # Real Estate
     "DLF":"Real Estate","GODREJPROP":"Real Estate","LODHA":"Real Estate",
     "OBEROIRLTY":"Real Estate","PHOENIXLTD":"Real Estate","PRESTIGE":"Real Estate",
