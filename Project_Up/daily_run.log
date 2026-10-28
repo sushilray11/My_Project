@@ -978,3 +978,284 @@ $KALYANI.NS: possibly delisted; no price data found  (period=5d)
 [15:02:03]   14. PIXTRANS      Score 7/10  Vol 0.1x  Price ₹1819.1
 [15:02:03]   15. SIMPLEXINF    Score 6/10  Vol 2.3x  Price ₹278.0
 [15:02:03] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (27 dates stored)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] Project Up — daily screener starting
+[15:00:06] Universe: 2619 stocks (live NSE)
+[15:00:06] Downloading 2619 tickers in 7 batches…
+[15:00:06]   Batch 1/7 (400 stocks)
+[15:00:27]   Batch 2/7 (400 stocks)
+[15:00:44]   Batch 3/7 (400 stocks)
+[15:01:01]   Batch 4/7 (400 stocks)
+[15:01:18]   Batch 5/7 (400 stocks)
+[15:01:35]   Batch 6/7 (400 stocks)
+[15:01:52]   Batch 7/7 (219 stocks)
+[15:02:01] 200 EMA filter: 858 pass
+[15:02:36]   Mcap check 100/858: 64 qualifying
+[15:03:11]   Mcap check 200/858: 131 qualifying
+[15:03:44]   Mcap check 300/858: 203 qualifying
+$KALYANI.NS: possibly delisted; no price data found  (period=5d)
+[15:04:16]   Mcap check 400/858: 271 qualifying
+[15:04:47]   Mcap check 500/858: 339 qualifying
+[15:05:19]   Mcap check 600/858: 406 qualifying
+[15:05:55]   Mcap check 700/858: 479 qualifying
+[15:06:30]   Mcap check 800/858: 554 qualifying
+[15:06:49] Mkt Cap filter: 598 pass
+[15:06:49] Scoring complete: 23 stocks qualify (score ≥ 5)
+[15:06:49] Top 15 picks:
+[15:06:49]    1. PREMEXPLN     Score 8/10  Vol 0.5x  Price ₹692.7
+[15:06:49]    2. ANANDRATHI    Score 8/10  Vol 0.4x  Price ₹2165.9
+[15:06:49]    3. BHARTIHEXA    Score 7/10  Vol 0.6x  Price ₹1632.0
+[15:06:49]    4. CEIGALL       Score 7/10  Vol 0.5x  Price ₹391.0
+[15:06:49]    5. DRREDDY       Score 7/10  Vol 0.4x  Price ₹1242.7
+[15:06:49]    6. LGBBROSLTD    Score 7/10  Vol 0.3x  Price ₹1706.7
+[15:06:49]    7. YUKEN         Score 7/10  Vol 0.3x  Price ₹1146.4
+[15:06:49]    8. PASHUPATI     Score 6/10  Vol 2.5x  Price ₹89.53
+[15:06:49]    9. RIIL          Score 6/10  Vol 2.2x  Price ₹759.3
+[15:06:49]   10. CARERATING    Score 6/10  Vol 2.1x  Price ₹1627.7
+[15:06:49]   11. CANTABIL      Score 6/10  Vol 0.7x  Price ₹248.7
+[15:06:49]   12. FINEORG       Score 6/10  Vol 0.6x  Price ₹5413.5
+[15:06:49]   13. PETRONET      Score 6/10  Vol 0.6x  Price ₹292.8
+[15:06:49]   14. ISGEC         Score 6/10  Vol 0.5x  Price ₹900.1
+[15:06:49]   15. GLAND         Score 6/10  Vol 0.5x  Price ₹3030.1
+[15:06:50] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (28 dates stored)
+[15:06:50] Bottom Formation scan: 951 candidates
+[15:06:50] Bottom Formation: 33 setups found
+[15:06:50] Consolidation scan: 951 candidates
+[15:06:50] Consolidation: 13 setups found
+[15:06:51] Combined history saved → 2026-10-19  (Upside: 15, Bottom: 20, Consol: 13)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:18:42] Project Up — daily screener starting
+[15:18:42] Universe: 2619 stocks (cache)
+[15:18:42] Downloading 2619 tickers in 7 batches…
+[15:18:42]   Batch 1/7 (400 stocks)
+[15:18:52]   Batch 2/7 (400 stocks)
+[15:19:01]   Batch 3/7 (400 stocks)
+
+10 Failed downloads:
+['GRAVITA.NS', 'GOODYEAR.NS', 'GLENMARK.NS', 'INOXGREEN.NS', 'INFY.NS', 'KAMAHOLD.NS', 'HERANBA.NS', 'GRSE.NS', 'GOACARBON.NS', 'HALDYNGL.NS']: TypeError("'NoneType' object is not subscriptable")
+[15:25:12]   Batch 4/7 (400 stocks)
+[15:25:22]   Batch 5/7 (400 stocks)
+[15:25:31]   Batch 6/7 (400 stocks)
+[15:25:39]   Batch 7/7 (219 stocks)
+
+10 Failed downloads:
+['VGCL.NS', 'ZEEL.NS', 'UNITECH.NS', 'VISL.NS', 'WORTHPERI.NS', 'UTTAMSUGAR.NS', 'UNIECOM.NS', 'TVVISION.NS', 'UFLEX.NS', 'VOITHPAPR.NS']: TypeError("'NoneType' object is not subscriptable")
+[15:42:50] 200 EMA filter: 726 pass
+[15:42:50]   Mcap check 100/726: 71 qualifying
+[15:42:54]   Mcap check 200/726: 137 qualifying
+[15:42:55]   Mcap check 300/726: 215 qualifying
+[15:42:59]   Mcap check 400/726: 276 qualifying
+[15:43:02]   Mcap check 500/726: 347 qualifying
+[15:43:05]   Mcap check 600/726: 419 qualifying
+[15:43:08]   Mcap check 700/726: 496 qualifying
+[15:43:09] Mkt Cap filter: 518 pass
+[15:43:09] Scoring complete: 8 stocks qualify (score ≥ 5)
+[15:43:09] Top 15 picks:
+[15:43:09]    1. CEIGALL       Score 7/10  Vol 0.7x  Price ₹387.25
+[15:43:09]    2. MAHASTEEL     Score 6/10  Vol 4.1x  Price ₹1339.0
+[15:43:09]    3. PREMEXPLN     Score 6/10  Vol 3.5x  Price ₹691.8
+[15:43:09]    4. ANANDRATHI    Score 6/10  Vol 1.5x  Price ₹2191.0
+[15:43:09]    5. SAMBHV        Score 6/10  Vol 0.6x  Price ₹161.72
+[15:43:09]    6. DRREDDY       Score 6/10  Vol 0.5x  Price ₹1239.4
+[15:43:09]    7. NRL           Score 6/10  Vol 0.1x  Price ₹163.57
+[15:43:09]    8. SMCGLOBAL     Score 6/10  Vol 0.1x  Price ₹103.05
+[15:43:10] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (29 dates stored)
+[15:43:10] Bottom Formation scan: 947 candidates
+[15:43:10] Bottom Formation: 22 setups found
+[15:43:10] Consolidation scan: 947 candidates
+[15:43:10] Consolidation: 14 setups found
+[15:43:11] Combined history saved → 2026-10-21  (Upside: 8, Bottom: 20, Consol: 14)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:08] Project Up — daily screener starting
+[15:00:08] Universe: 2619 stocks (cache)
+[15:00:08] Downloading 2619 tickers in 7 batches…
+[15:00:08]   Batch 1/7 (400 stocks)
+[15:00:29]   Batch 2/7 (400 stocks)
+[15:00:47]   Batch 3/7 (400 stocks)
+[15:01:04]   Batch 4/7 (400 stocks)
+[15:01:21]   Batch 5/7 (400 stocks)
+[15:01:41]   Batch 6/7 (400 stocks)
+[15:01:59]   Batch 7/7 (219 stocks)
+[15:02:09] 200 EMA filter: 707 pass
+[15:02:12]   Mcap check 100/707: 69 qualifying
+[15:02:16]   Mcap check 200/707: 137 qualifying
+[15:02:19]   Mcap check 300/707: 212 qualifying
+[15:02:31]   Mcap check 400/707: 273 qualifying
+[15:02:34]   Mcap check 500/707: 344 qualifying
+[15:02:35]   Mcap check 600/707: 415 qualifying
+[15:02:37]   Mcap check 700/707: 491 qualifying
+[15:02:37] Mkt Cap filter: 496 pass
+[15:02:37] Scoring complete: 3 stocks qualify (score ≥ 5)
+[15:02:37] Top 15 picks:
+[15:02:37]    1. RGL           Score 6/10  Vol 0.4x  Price ₹161.67
+[15:02:37]    2. SIMPLEXINF    Score 6/10  Vol 0.4x  Price ₹263.44
+[15:02:37]    3. MOBIKWIK      Score 6/10  Vol 0.2x  Price ₹228.0
+[15:02:38] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (30 dates stored)
+[15:02:38] Bottom Formation scan: 952 candidates
+[15:02:38] Bottom Formation: 16 setups found
+[15:02:38] Consolidation scan: 952 candidates
+[15:02:38] Consolidation: 9 setups found
+[15:02:39] Combined history saved → 2026-10-22  (Upside: 3, Bottom: 16, Consol: 9)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:07] Project Up — daily screener starting
+[15:00:07] Universe: 2619 stocks (cache)
+[15:00:07] Downloading 2619 tickers in 7 batches…
+[15:00:07]   Batch 1/7 (400 stocks)
+[15:00:29]   Batch 2/7 (400 stocks)
+[15:00:45]   Batch 3/7 (400 stocks)
+[15:01:04]   Batch 4/7 (400 stocks)
+[15:01:22]   Batch 5/7 (400 stocks)
+[15:01:42]   Batch 6/7 (400 stocks)
+[15:02:00]   Batch 7/7 (219 stocks)
+[15:02:11] 200 EMA filter: 588 pass
+[15:02:14]   Mcap check 100/588: 72 qualifying
+[15:02:15]   Mcap check 200/588: 141 qualifying
+[15:02:17]   Mcap check 300/588: 209 qualifying
+[15:02:19]   Mcap check 400/588: 280 qualifying
+[15:02:20]   Mcap check 500/588: 355 qualifying
+[15:02:21] Mkt Cap filter: 424 pass
+[15:02:21] Scoring complete: 2 stocks qualify (score ≥ 5)
+[15:02:21] Top 15 picks:
+[15:02:21]    1. ANANDRATHI    Score 7/10  Vol 1.9x  Price ₹2234.4
+[15:02:21]    2. BHARTIHEXA    Score 6/10  Vol 0.3x  Price ₹1640.4
+[15:02:22] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (30 dates stored)
+[15:02:22] Bottom Formation scan: 951 candidates
+[15:02:22] Bottom Formation: 11 setups found
+[15:02:22] Consolidation scan: 951 candidates
+[15:02:22] Consolidation: 5 setups found
+[15:02:23] Combined history saved → 2026-10-23  (Upside: 2, Bottom: 11, Consol: 5)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:07] Project Up — daily screener starting
+[15:00:08] Universe: 2629 stocks (live NSE)
+[15:00:08] Downloading 2629 tickers in 7 batches…
+[15:00:08]   Batch 1/7 (400 stocks)
+[15:00:26]   Batch 2/7 (400 stocks)
+[15:00:44]   Batch 3/7 (400 stocks)
+[15:01:00]   Batch 4/7 (400 stocks)
+HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: KHAZANCHI.NS"}}}
+$KHAZANCHI.NS: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+
+1 Failed download:
+['KHAZANCHI.NS']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+[15:01:17]   Batch 5/7 (400 stocks)
+[15:01:37]   Batch 6/7 (400 stocks)
+$SUDARSHAN.NS: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+
+1 Failed download:
+['SUDARSHAN.NS']: possibly delisted; no price data found  (period=1y) (Yahoo error = "No data found, symbol may be delisted")
+[15:01:55]   Batch 7/7 (229 stocks)
+[15:02:05] 200 EMA filter: 618 pass
+[15:02:42]   Mcap check 100/618: 71 qualifying
+[15:03:19]   Mcap check 200/618: 142 qualifying
+$KALYANI.NS: possibly delisted; no price data found  (period=5d)
+[15:03:51]   Mcap check 300/618: 205 qualifying
+[15:04:28]   Mcap check 400/618: 274 qualifying
+[15:05:04]   Mcap check 500/618: 348 qualifying
+[15:05:40]   Mcap check 600/618: 421 qualifying
+[15:05:47] Mkt Cap filter: 437 pass
+[15:05:47] Scoring complete: 4 stocks qualify (score ≥ 5)
+[15:05:47] Top 15 picks:
+[15:05:47]    1. ANANDRATHI    Score 7/10  Vol 0.6x  Price ₹2236.0
+[15:05:47]    2. PNB           Score 6/10  Vol 0.6x  Price ₹120.35
+[15:05:47]    3. YUKEN         Score 6/10  Vol 0.3x  Price ₹1109.4
+[15:05:47]    4. WSTCSTPAPR    Score 6/10  Vol 0.2x  Price ₹791.15
+[15:05:48] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (30 dates stored)
+[15:05:48] Bottom Formation scan: 950 candidates
+[15:05:48] Bottom Formation: 6 setups found
+[15:05:48] Consolidation scan: 950 candidates
+[15:05:48] Consolidation: 4 setups found
+[15:05:49] Combined history saved → 2026-10-26  (Upside: 4, Bottom: 6, Consol: 4)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] Project Up — daily screener starting
+[15:00:05] Universe: 2629 stocks (cache)
+[15:00:05] Downloading 2629 tickers in 7 batches…
+[15:00:05]   Batch 1/7 (400 stocks)
+[15:00:39]   Batch 2/7 (400 stocks)
+
+2 Failed downloads:
+['DATAPATTNS.NS', 'CEIGALL.NS']: TypeError("'NoneType' object is not subscriptable")
+[15:01:01]   Batch 3/7 (400 stocks)
+[15:01:26]   Batch 4/7 (400 stocks)
+
+1 Failed download:
+['MAXIND.NS']: TypeError("'NoneType' object is not subscriptable")
+[15:01:53]   Batch 5/7 (400 stocks)
+[15:02:19]   Batch 6/7 (400 stocks)
+[15:02:48]   Batch 7/7 (229 stocks)
+[15:03:09] 200 EMA filter: 682 pass
+[15:03:14]   Mcap check 100/682: 70 qualifying
+[15:03:18]   Mcap check 200/682: 138 qualifying
+[15:03:28]   Mcap check 300/682: 207 qualifying
+[15:03:35]   Mcap check 400/682: 271 qualifying
+[15:03:38]   Mcap check 500/682: 343 qualifying
+[15:03:42]   Mcap check 600/682: 417 qualifying
+[15:03:45] Mkt Cap filter: 481 pass
+[15:03:45] Scoring complete: 13 stocks qualify (score ≥ 5)
+[15:03:45] Top 15 picks:
+[15:03:45]    1. ANANDRATHI    Score 7/10  Vol 0.6x  Price ₹2255.2
+[15:03:45]    2. YUKEN         Score 7/10  Vol 0.2x  Price ₹1131.1
+[15:03:45]    3. UNITEDPOLY    Score 6/10  Vol 0.7x  Price ₹51.8
+[15:03:45]    4. RATNAVEER     Score 6/10  Vol 0.5x  Price ₹346.5
+[15:03:45]    5. SHREEPUSHK    Score 6/10  Vol 0.5x  Price ₹500.9
+[15:03:45]    6. KARURVYSYA    Score 6/10  Vol 0.4x  Price ₹348.8
+[15:03:45]    7. WESTLIFE      Score 6/10  Vol 0.4x  Price ₹600.9
+[15:03:45]    8. DLF           Score 6/10  Vol 0.4x  Price ₹669.9
+[15:03:45]    9. SGFIN         Score 6/10  Vol 0.3x  Price ₹652.0
+[15:03:45]   10. OPTIEMUS      Score 6/10  Vol 0.3x  Price ₹735.9
+[15:03:45]   11. GOODLUCK      Score 6/10  Vol 0.2x  Price ₹549.35
+[15:03:45]   12. OAL           Score 6/10  Vol 0.2x  Price ₹628.0
+[15:03:45]   13. THELEELA      Score 6/10  Vol 0.2x  Price ₹590.45
+[15:03:46] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (30 dates stored)
+[15:03:46] Bottom Formation scan: 951 candidates
+[15:03:46] Bottom Formation: 6 setups found
+[15:03:46] Consolidation scan: 951 candidates
+[15:03:46] Consolidation: 5 setups found
+[15:03:47] Combined history saved → 2026-10-27  (Upside: 13, Bottom: 6, Consol: 5)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:07] Project Up — daily screener starting
+[15:00:07] Universe: 2629 stocks (cache)
+[15:00:07] Downloading 2629 tickers in 7 batches…
+[15:00:07]   Batch 1/7 (400 stocks)
+[15:00:22]   Batch 2/7 (400 stocks)
+[15:00:33]   Batch 3/7 (400 stocks)
+[15:00:46]   Batch 4/7 (400 stocks)
+[15:00:59]   Batch 5/7 (400 stocks)
+[15:01:10]   Batch 6/7 (400 stocks)
+[15:01:21]   Batch 7/7 (229 stocks)
+[15:01:27] 200 EMA filter: 687 pass
+[15:01:30]   Mcap check 100/687: 69 qualifying
+[15:01:35]   Mcap check 200/687: 137 qualifying
+[15:01:41]   Mcap check 300/687: 210 qualifying
+[15:01:47]   Mcap check 400/687: 273 qualifying
+[15:01:50]   Mcap check 500/687: 345 qualifying
+[15:01:55]   Mcap check 600/687: 418 qualifying
+[15:01:58] Mkt Cap filter: 485 pass
+[15:01:58] Scoring complete: 14 stocks qualify (score ≥ 5)
+[15:01:58] Top 15 picks:
+[15:01:58]    1. AVTNPL        Score 7/10  Vol 0.2x  Price ₹91.77
+[15:01:58]    2. NRL           Score 6/10  Vol 1.0x  Price ₹158.0
+[15:01:58]    3. SOUTHBANK     Score 6/10  Vol 0.5x  Price ₹54.53
+[15:01:58]    4. BHARTIHEXA    Score 6/10  Vol 0.5x  Price ₹1662.2
+[15:01:58]    5. PANACHE       Score 6/10  Vol 0.5x  Price ₹660.0
+[15:01:58]    6. LALPATHLAB    Score 6/10  Vol 0.4x  Price ₹1922.9
+[15:01:58]    7. CHENNPETRO    Score 6/10  Vol 0.4x  Price ₹1524.0
+[15:01:58]    8. SANSERA       Score 6/10  Vol 0.4x  Price ₹4326.4
+[15:01:58]    9. ZYDUSLIFE     Score 6/10  Vol 0.3x  Price ₹1182.2
+[15:01:58]   10. CEIGALL       Score 6/10  Vol 0.3x  Price ₹382.1
+[15:01:58]   11. EBGNG         Score 6/10  Vol 0.3x  Price ₹727.55
+[15:01:58]   12. CRISIL        Score 6/10  Vol 0.2x  Price ₹4700.1
+[15:01:58]   13. WESTLIFE      Score 6/10  Vol 0.2x  Price ₹597.8
+[15:01:58]   14. SHYAMMETL     Score 6/10  Vol 0.1x  Price ₹1143.1
+[15:01:59] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (30 dates stored)
+[15:01:59] Bottom Formation scan: 955 candidates
+[15:01:59] Bottom Formation: 5 setups found
+[15:01:59] Consolidation scan: 955 candidates
+[15:01:59] Consolidation: 6 setups found
+[15:02:00] Combined history saved → 2026-10-28  (Upside: 14, Bottom: 5, Consol: 6)
