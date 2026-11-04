@@ -360,3 +360,58 @@ KeyError: 'Score /10'
 [15:00:18] Consolidation Breakout: 1 candidates
 [15:00:21] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-28)
 [15:00:21] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:06] NSE F&O Daily Export starting…
+[15:00:06] F&O list: 217 stocks (Cache (fresh))
+[15:00:06] Downloading 1Y price history for all stocks…
+[15:00:15] Download complete. Running screeners…
+[15:00:15] Probable Upside:        9 candidates
+[15:00:15] Support Entry:          15 candidates
+[15:00:15] Consolidation Breakout: 0 candidates
+[15:00:18] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-29)
+[15:00:18] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] NSE F&O Daily Export starting…
+[15:00:05] F&O list: 217 stocks (Cache (fresh))
+[15:00:05] Downloading 1Y price history for all stocks…
+[15:00:16] Download complete. Running screeners…
+[15:00:16] Probable Upside:        15 candidates
+[15:00:16] Support Entry:          15 candidates
+[15:00:16] Consolidation Breakout: 0 candidates
+[15:00:19] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-10-30)
+[15:00:20] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:06] NSE F&O Daily Export starting…
+[15:00:06] F&O list: 217 stocks (Cache (fresh))
+[15:00:06] Downloading 1Y price history for all stocks…
+[15:00:18] Download complete. Running screeners…
+[15:00:18] Probable Upside:        15 candidates
+[15:00:18] Support Entry:          15 candidates
+[15:00:18] Consolidation Breakout: 0 candidates
+[15:00:21] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-11-02)
+[15:00:21] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:05] NSE F&O Daily Export starting…
+[15:00:05] F&O list: 217 stocks (Cache (fresh))
+[15:00:05] Downloading 1Y price history for all stocks…
+[15:00:14] Download complete. Running screeners…
+[15:00:14] Probable Upside:        15 candidates
+[15:00:14] Support Entry:          15 candidates
+[15:00:14] Consolidation Breakout: 0 candidates
+[15:00:18] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-11-03)
+[15:00:18] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:56:43] NSE F&O Daily Export starting…
+[15:56:43] F&O list: 217 stocks (Cache (fresh))
+[15:56:43] Downloading 1Y price history for all stocks…
+[15:56:52] Download complete. Running screeners…
+[15:56:52] Probable Upside:        15 candidates
+[15:56:52] Support Entry:          15 candidates
+[15:56:52] Consolidation Breakout: 0 candidates
+[15:56:53] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-11-04)
+[15:56:53] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx

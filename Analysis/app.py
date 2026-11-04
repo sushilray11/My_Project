@@ -255,13 +255,52 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 # ── Top Navbar ─────────────────────────────────────────────────────────────────
-st.markdown("""
+@st.cache_data(ttl=300, show_spinner=False)
+def _fetch_indices():
+    import yfinance as yf
+    out = {}
+    for key, sym in [("nifty", "^NSEI"), ("sensex", "^BSESN")]:
+        try:
+            fi = yf.Ticker(sym).fast_info
+            price = fi.last_price
+            prev  = fi.previous_close
+            chg   = (price - prev) / prev * 100 if prev else 0
+            out[key] = (price, chg)
+        except Exception:
+            out[key] = (None, 0)
+    return out
+
+_indices = _fetch_indices()
+
+def _idx_html(label, price, chg):
+    if price is None:
+        return f'<div style="text-align:right"><div style="font-size:10px;color:#94a3b8">{label}</div><div style="font-size:12px;color:#64748b">—</div></div>'
+    color = "#4ade80" if chg >= 0 else "#f87171"
+    arrow = "▲" if chg >= 0 else "▼"
+    sign  = "+" if chg >= 0 else ""
+    return (
+        f'<div style="text-align:right;margin-left:24px">'
+        f'  <div style="font-size:10px;color:#94a3b8;letter-spacing:.6px;font-weight:500">{label}</div>'
+        f'  <div style="font-size:16px;font-weight:700;color:#f8fafc;line-height:1.3">{price:,.2f}'
+        f'    <span style="font-size:12px;font-weight:600;color:{color};margin-left:5px">{arrow} {sign}{chg:.2f}%</span>'
+        f'  </div>'
+        f'</div>'
+    )
+
+_nifty_html  = _idx_html("NIFTY 50",  *_indices["nifty"])
+_sensex_html = _idx_html("SENSEX",    *_indices["sensex"])
+
+st.markdown(f"""
 <div class="top-navbar">
     <div>
         <div class="nav-title">📊 NSE F&amp;O Analysis</div>
         <div class="nav-subtitle">Futures &amp; Options Screener — <span style="font-size:0.72rem;opacity:0.7;">powered by yfinance</span></div>
     </div>
-    <span class="nav-badge">F&amp;O Live</span>
+    <div style="display:flex;align-items:center;gap:4px">
+        {_nifty_html}
+        {_sensex_html}
+        <span class="nav-badge" style="margin-left:16px">F&amp;O Live</span>
+    </div>
 </div>
 <div class="content-wrap" style="padding-bottom:0">
 """, unsafe_allow_html=True)
@@ -635,7 +674,7 @@ def _dl_hist_1mo(tickers_tuple):
     import yfinance as yf
     return yf.download(list(tickers_tuple), period="1mo", auto_adjust=True, progress=False)
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_history():
     import os
     path = os.path.join(os.path.dirname(__file__), "exports", "consolidated_history.xlsx")
@@ -834,10 +873,15 @@ def _upside_tab():
 
                     if _st_score >= 7:
                         _vol_ratio = round(_vols[-1] / _avgv20, 2) if _avgv20 else 0.0
+                        _swing_hi2 = max(_highs[-60:]) if len(_highs) >= 60 else max(_highs)
+                        _tgt2      = round(max(_swing_hi2, _cur * 1.08), 2)
+                        _upside2   = round((_tgt2 - _cur) / _cur * 100, 1)
                         _swing_rows.append({
-                            "Stock":         _nse2,
+                            "Stock":         f"https://www.tradingview.com/chart/?symbol=NSE:{_nse2}",
                             "Sector":        _SECTOR.get(_nse2, "Other"),
                             "Price (₹)":     round(_cur, 2),
+                            "Target (₹)":    _tgt2,
+                            "Upside %":      _upside2,
                             "RSI":           round(_rsi2, 1),
                             "Vol Ratio":     _vol_ratio,
                             "Net Accum":     "✅" if _net_accum      else "❌",
@@ -847,7 +891,6 @@ def _upside_tab():
                             "Full Trend":    "✅" if _sma_full       else "❌",
                             "Quality":       _quality,
                             "Score /10":     _st_score,
-                            "Chart":         f"https://www.tradingview.com/chart/?symbol=NSE:{_nse2}",
                         })
                 except Exception:
                     pass
@@ -875,14 +918,26 @@ def _upside_tab():
                 f"**{_sweet} sweet spot** (Score 8–9/10)"
             )
 
+            _SWING_BOOL_COLS = ["Net Accum", "At Support", "Rising Lows", "Entry Trigger", "Full Trend"]
+            def _hl_swing_stock(row):
+                styles = [""] * len(row)
+                try:
+                    if all(str(row[c]) == "✅" for c in _SWING_BOOL_COLS if c in row.index):
+                        styles[row.index.get_loc("Stock")] = "background-color:#dcfce7;color:#166534;font-weight:700"
+                except Exception:
+                    pass
+                return styles
+
             st.dataframe(
-                _swing_df,
+                _swing_df.style.apply(_hl_swing_stock, axis=1),
                 use_container_width=True,
                 height=min(600, 56 + len(_swing_df) * 35),
                 column_config={
-                    "Stock":          st.column_config.TextColumn("Stock", pinned=True),
+                    "Stock":          st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                     "Sector":         st.column_config.TextColumn("Sector"),
                     "Price (₹)":      st.column_config.NumberColumn("Price (₹)",     format="₹%.2f"),
+                    "Target (₹)":     st.column_config.NumberColumn("Target (₹)",    format="₹%.2f"),
+                    "Upside %":       st.column_config.NumberColumn("Upside %",       format="+%.1f%%"),
                     "RSI":            st.column_config.NumberColumn("RSI",            format="%.1f"),
                     "Vol Ratio":      st.column_config.NumberColumn("Vol Ratio",      format="%.2fx"),
                     "Net Accum":      st.column_config.TextColumn("Net Accum (10D)"),
@@ -892,7 +947,6 @@ def _upside_tab():
                     "Full Trend":     st.column_config.TextColumn("SMA50>SMA200"),
                     "Quality":        st.column_config.TextColumn("Quality"),
                     "Score /10":      st.column_config.NumberColumn("Score /10",      format="%d ⭐"),
-                    "Chart":          st.column_config.LinkColumn("TradingView",      display_text="📈 Chart"),
                 },
             )
             st.caption(
@@ -977,7 +1031,8 @@ def _support_tab():
                     # Pullback from 20D high
                     _hi20_3 = max(_h3s[-20:]) if len(_h3s) >= 20 else max(_h3s)
                     _pb3    = (_hi20_3 - _p3) / _hi20_3 * 100
-                    if not (3 <= _pb3 <= 25):
+                    # hard filter: pullback must not be too deep (downtrend risk)
+                    if not (3 <= _pb3 <= 15):
                         continue
 
                     # hard filter: must be a pullback in an uptrend (SMA50 rising)
@@ -1031,8 +1086,8 @@ def _support_tab():
                     _vol_surge3 = bool(_avgv3 and _v3[-1] > _avgv3 * 1.5 and _c3[-1] > _c3[-2])  # reversal surge
                     _vol_cond3  = _vol_quiet3 or _vol_surge3
 
-                    # 7. RSI reset: cooled to neutral zone (not in freefall, not overbought)
-                    _rsi_reset = 35 <= _rsi3 <= 70
+                    # 7. RSI reset: cooled to bottom zone (not in freefall, not already bounced)
+                    _rsi_reset = 30 <= _rsi3 <= 55
 
                     # 8. Lows stable: recent actual lows not making lower lows
                     _lows_stable = bool(len(_l3) >= 8 and min(_l3[-3:]) >= min(_l3[-8:-3]))
@@ -1046,19 +1101,23 @@ def _support_tab():
                                 and len(_l3) >= 3 and _l3[-3] <= _near3 * 1.02)
                     _reversal = _lower_wick3 or _bounce3
 
-                    # 10. Entry trigger: vol expanding + up close (early sign) OR breaking above base top (strong sign)
+                    # 10. Entry trigger: vol > 1.2x 20D avg + up close (early sign) OR breaking above base top (strong sign)
                     _base_top   = max(_c3[-6:-1]) if len(_c3) >= 6 else _c3[-2]
-                    _vol_exp3   = bool(len(_v3) >= 2 and _v3[-1] > _v3[-2] and _c3[-1] > _c3[-2])
+                    _vol_exp3   = bool(_avgv3 and _v3[-1] > _avgv3 * 1.2 and _c3[-1] > _c3[-2])
                     _break_up3  = bool(_c3[-1] > _base_top and _avgv3 and _v3[-1] > _avgv3 * 1.2)
                     _entry3     = _vol_exp3 or _break_up3
+
+                    # 11. Near 52W low: stock within 15% of its 52-week low (structural floor)
+                    _low52w     = min(_l3[-252:]) if len(_l3) >= 252 else min(_l3)
+                    _near_52w   = (_p3 - _low52w) / max(_low52w, 1) <= 0.15
 
                     _sc3 = sum([
                         _at_sup3, _prior_uptrend_s, _confluence3, _proven_sup,
                         _base_forming, _vol_cond3, _rsi_reset,
-                        _lows_stable, _reversal, _entry3,
+                        _lows_stable, _reversal, _entry3, _near_52w,
                     ])
 
-                    if _sc3 >= 5:
+                    if _sc3 >= 6:
                         _buy_lo3  = round(_near3 * 0.99, 2)
                         _buy_hi3  = round(_near3 * 1.02, 2)
                         _stop3    = round(_near3 * 0.97, 2)
@@ -1084,7 +1143,7 @@ def _support_tab():
                             _stype3 = "Swing Low"
 
                         _sup_rows.append({
-                            "Stock":         _nse3,
+                            "Stock":         f"https://www.tradingview.com/chart/?symbol=NSE:{_nse3}",
                             "Sector":        _SECTOR.get(_nse3, "Other"),
                             "Price (₹)":     round(_p3, 2),
                             "Support (₹)":   round(_near3, 2),
@@ -1102,10 +1161,11 @@ def _support_tab():
                             "Entry Trigger": "✅" if _entry3          else "❌",
                             "Buy Zone":      f"₹{_buy_lo3}–{_buy_hi3}",
                             "Target (₹)":   _tgt3,
+                            "Upside %":     _rwd3,
                             "Stop (₹)":     _stop3,
                             "R:R":          _rr3,
-                            "Score /10":     _sc3,
-                            "Chart":         f"https://www.tradingview.com/chart/?symbol=NSE:{_nse3}",
+                            "Near 52W Low": "✅" if _near_52w else "❌",
+                            "Score /11":     _sc3,
                         })
                 except Exception:
                     pass
@@ -1117,24 +1177,33 @@ def _support_tab():
         if _sup_data:
             _sup_df = (
                 pd.DataFrame(_sup_data)
-                .sort_values(["Score /10", "R:R", "Gap %"], ascending=[False, False, True])
+                .sort_values(["Score /11", "R:R", "Gap %"], ascending=[False, False, True])
                 .head(15)
                 .reset_index(drop=True)
             )
             _sup_df.index += 1
 
-            _strong3 = (_sup_df["Score /10"] >= 8).sum()
+            _strong3 = (_sup_df["Score /11"] >= 9).sum()
             st.markdown(
                 f"**{len(_sup_df)} stocks** found at key support levels  •  "
-                f"**{_strong3} high-conviction setups** (Score ≥ 8/10)"
+                f"**{_strong3} high-conviction setups** (Score ≥ 9/11)"
             )
 
+            def _hl_sup_stock(row):
+                styles = [""] * len(row)
+                try:
+                    if str(row.get("Entry Trigger", "")) == "✅":
+                        styles[row.index.get_loc("Stock")] = "background-color:#dcfce7;color:#166534;font-weight:700"
+                except Exception:
+                    pass
+                return styles
+
             st.dataframe(
-                _sup_df,
+                _sup_df.style.apply(_hl_sup_stock, axis=1),
                 use_container_width=True,
                 height=min(600, 56 + len(_sup_df) * 35),
                 column_config={
-                    "Stock":          st.column_config.TextColumn("Stock", pinned=True),
+                    "Stock":          st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                     "Sector":         st.column_config.TextColumn("Sector"),
                     "Price (₹)":      st.column_config.NumberColumn("Price (₹)",     format="₹%.2f"),
                     "Support (₹)":    st.column_config.NumberColumn("Support (₹)",   format="₹%.2f"),
@@ -1150,12 +1219,13 @@ def _support_tab():
                     "Lows Stable":    st.column_config.TextColumn("Lows Stable"),
                     "Reversal":       st.column_config.TextColumn("Reversal"),
                     "Entry Trigger":  st.column_config.TextColumn("Entry Trigger"),
+                    "Near 52W Low":   st.column_config.TextColumn("Near 52W Low"),
                     "Buy Zone":       st.column_config.TextColumn("Buy Zone"),
                     "Target (₹)":    st.column_config.NumberColumn("Target (₹)",     format="₹%.2f"),
+                    "Upside %":      st.column_config.NumberColumn("Upside %",        format="+%.1f%%"),
                     "Stop (₹)":      st.column_config.NumberColumn("Stop (₹)",       format="₹%.2f"),
                     "R:R":            st.column_config.NumberColumn("Reward:Risk",    format="%.1f:1"),
-                    "Score /10":      st.column_config.NumberColumn("Score /10",      format="%d ⭐"),
-                    "Chart":          st.column_config.LinkColumn("TradingView",      display_text="📈 Chart"),
+                    "Score /11":      st.column_config.NumberColumn("Score /11",      format="%d ⭐"),
                 },
             )
 
@@ -1170,12 +1240,13 @@ def _support_tab():
     | **Base Forming** | Last 5D price range < 5% — stock consolidating tightly, not falling |
     | **Vol Quiet** | 5-day avg volume below prior 10-day avg — sellers exhausting, base building |
     | **Vol Surge** | Today's volume > 1.5× 20D avg with up close — reversal confirmed by buyers |
-    | **RSI Reset (35–70)** | RSI cooled to neutral — healthy retracement; upper bound raised to 70 to include strong-trend pullbacks |
-    | **Lows Stable** | Recent close ≥ close 5 days ago — trend floor holding (uses closes to avoid penalising hammer wicks) |
+    | **RSI Reset (30–55)** | RSI cooled to bottom zone — stock has genuinely pulled back, not already mid-bounce |
+    | **Lows Stable** | Recent close ≥ close 5 days ago — trend floor holding |
     | **Reversal Candle** | Lower wick rejection at support OR 2 consecutive up-close days |
-    | **Entry Trigger** | Volume expanding + up close today (early sign) OR price breaking above 5D base top with normal+ volume (strong confirmation) |
+    | **Entry Trigger** | Volume > 1.2× 20D avg + up close today (early sign) OR price breaking above 5D base top |
+    | **Near 52W Low** | Price within 15% of 52-week low — structural floor, limited downside to structure |
 
-    **Hard filters:** Above SMA200 · Price within 2.5% of support · Pullback 3–25% from 20D high · R:R ≥ 1.5
+    **Hard filters:** Above SMA200 · Price within 2.5% of support · Pullback 3–15% from 20D high · R:R ≥ 1.5
     **Swing lows:** Identified using 5-bar pivot (more meaningful than 3-bar)
     **Target** = prior 60D swing high or +8% (whichever is higher) · **Stop** = 3% below support
     ⚠️ For informational purposes only — not financial advice
@@ -1344,12 +1415,13 @@ def _consol_tab():
 
                     if _sc4 >= 7:
                         _con_rows.append({
-                            "Stock":        _nse4,
+                            "Stock":        f"https://www.tradingview.com/chart/?symbol=NSE:{_nse4}",
                             "Sector":       _SECTOR.get(_nse4, "Other"),
                             "Price (₹)":    round(_p4, 2),
                             "Breakout ₹":   _brk4,
                             "To Breakout%": _pct_to_brk,
                             "Target ₹":     _tgt4,
+                            "Upside %":     _rwd4,
                             "Stop ₹":       _stop4,
                             "Risk %":       _rsk4,
                             "R:R":          _rr4,
@@ -1367,7 +1439,6 @@ def _consol_tab():
                             "Prior Trend":  "✅" if _prior_uptrend  else "❌",
                             "Entry Trigger":"✅" if _entry4         else "❌",
                             "Score /10":    _sc4,
-                            "Chart":        f"https://www.tradingview.com/chart/?symbol=NSE:{_nse4}",
                         })
                 except Exception:
                     pass
@@ -1376,6 +1447,12 @@ def _consol_tab():
             st.session_state["consol_data"] = _con_rows
 
         _con_data = st.session_state.get("consol_data", [])
+        # Guard: clear stale cache if rows are missing expected columns
+        if _con_data and isinstance(_con_data, list) and _con_data:
+            if "Score /10" not in _con_data[0]:
+                st.session_state.pop("consol_data", None)
+                st.session_state.pop("consol_requested", None)
+                _con_data = []
         if _con_data:
             _con_df = (
                 pd.DataFrame(_con_data)
@@ -1392,17 +1469,28 @@ def _consol_tab():
                 f"**{_strong4} high-conviction setups** (Score ≥ 8/10)"
             )
 
+            _CON_BOOL_COLS = ["SMA Flat", "Prior Move", "Vol Pattern", "Near Breakout", "BB Squeeze", "Above SMA200", "Prior Trend", "Entry Trigger"]
+            def _hl_con_stock(row):
+                styles = [""] * len(row)
+                try:
+                    if str(row.get("Entry Trigger", "")) == "✅":
+                        styles[row.index.get_loc("Stock")] = "background-color:#dcfce7;color:#166534;font-weight:700"
+                except Exception:
+                    pass
+                return styles
+
             st.dataframe(
-                _con_df,
+                _con_df.style.apply(_hl_con_stock, axis=1),
                 use_container_width=True,
                 height=min(600, 56 + len(_con_df) * 35),
                 column_config={
-                    "Stock":        st.column_config.TextColumn("Stock", pinned=True),
+                    "Stock":        st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                     "Sector":       st.column_config.TextColumn("Sector"),
                     "Price (₹)":   st.column_config.NumberColumn("Price (₹)",      format="₹%.2f"),
                     "Breakout ₹":  st.column_config.NumberColumn("Breakout ₹",     format="₹%.2f"),
                     "To Breakout%":st.column_config.NumberColumn("To Breakout %",  format="%.2f%%"),
                     "Target ₹":    st.column_config.NumberColumn("Target ₹",       format="₹%.2f"),
+                    "Upside %":    st.column_config.NumberColumn("Upside %",        format="+%.1f%%"),
                     "Stop ₹":      st.column_config.NumberColumn("Stop ₹",         format="₹%.2f"),
                     "Risk %":      st.column_config.NumberColumn("Risk %",          format="%.1f%%"),
                     "R:R":         st.column_config.NumberColumn("Reward:Risk",     format="%.1f:1"),
@@ -1420,7 +1508,6 @@ def _consol_tab():
                     "Prior Trend":  st.column_config.TextColumn("Prior Trend"),
                     "Entry Trigger":st.column_config.TextColumn("Entry Trigger"),
                     "Score /10":   st.column_config.NumberColumn("Score /10",      format="%d"),
-                    "Chart":       st.column_config.LinkColumn("TradingView",      display_text="📈 Chart"),
                 },
             )
 
@@ -1973,14 +2060,25 @@ def _industry_tab():
 
 @st.fragment
 def _history_tab():
+    import os as _os2
     hist = _load_history()
+
+    master_path = _os2.path.join(_os2.path.dirname(__file__), "exports", "screener_master.xlsx")
+    master_dates = []
+    if _os2.path.exists(master_path):
+        try:
+            _xl_sheets = pd.ExcelFile(master_path)
+            master_dates = [s for s in _xl_sheets.sheet_names if str(s)[:4].isdigit()]
+        except Exception:
+            master_dates = []
+
     sections = [
-        ("🔮 Probable Upside", "Probable Upside"),
-        ("🎯 Support Entry", "Support Entry"),
-        ("🔲 Consolidation Breakout", "Consolidation Breakout"),
+        ("🔮 Probable Upside",       "Probable Upside",       "PROBABLE UPSIDE"),
+        ("🎯 Support Entry",          "Support Entry",          "SUPPORT ENTRY"),
+        ("🔲 Consolidation Breakout", "Consolidation Breakout", "CONSOLIDATION BREAKOUT"),
     ]
     htab1, htab2, htab3 = st.tabs([s[0] for s in sections])
-    for htab, (label, sheet_name) in zip([htab1, htab2, htab3], sections):
+    for htab, (label, sheet_name, section_key) in zip([htab1, htab2, htab3], sections):
         with htab:
             df = hist.get(sheet_name)
             if df is None or df.empty:
@@ -1988,7 +2086,7 @@ def _history_tab():
                 continue
 
             date_cols = [c for c in df.columns if str(c)[:4].isdigit()]
-            last7 = list(reversed(date_cols[-7:]))   # newest left
+            last7 = list(reversed(date_cols[-7:]))
 
             display = df[last7].copy().head(15)
             display.columns = [str(c)[:10] for c in display.columns]
@@ -1996,7 +2094,46 @@ def _history_tab():
             display.index.name = "Rank"
             display = display.fillna("—")
 
+            st.caption(f"Top picks across the last {len(last7)} sessions · newest left. Select a date below for full details.")
             st.dataframe(display, use_container_width=True, height=580)
+
+            # ── Detail table ──────────────────────────────────────────────────
+            if master_dates:
+                st.markdown("---")
+                sel_date = st.selectbox(
+                    "Full details for date", master_dates, index=0,
+                    key=f"hist_sel_{sheet_name}"
+                )
+                try:
+                    _xl_m = pd.ExcelFile(master_path)
+                    if sel_date in _xl_m.sheet_names:
+                        _raw = _xl_m.parse(sel_date, header=None, dtype=str).fillna("")
+                        _detail_df = None
+                        for _ri, _rrow in _raw.iterrows():
+                            _cell0 = str(_rrow.iloc[0]).strip().upper()
+                            if section_key in _cell0:
+                                if _ri + 1 < len(_raw):
+                                    _hdrs = [str(v).strip() for v in _raw.iloc[_ri + 1] if str(v).strip() and str(v).strip() != "None"]
+                                    _data = []
+                                    for _j in range(_ri + 2, len(_raw)):
+                                        _vals = [str(v).strip() for v in _raw.iloc[_j]]
+                                        if all(v in ("", "nan", "None") for v in _vals[:3]):
+                                            break
+                                        _data.append(_vals[:len(_hdrs)])
+                                    if _data:
+                                        _detail_df = pd.DataFrame(_data, columns=_hdrs)
+                                        _detail_df = _detail_df[_detail_df["Stock"].str.len() > 0]
+                                        _detail_df = _detail_df[_detail_df["Stock"] != "Stock"]
+                                        _detail_df = _detail_df.reset_index(drop=True)
+                                        _detail_df.index += 1
+                                break
+                        if _detail_df is not None and not _detail_df.empty:
+                            _show = [c for c in _detail_df.columns if c.lower() not in ("chart", "none", "")]
+                            st.dataframe(_detail_df[_show], use_container_width=True, height=560)
+                        else:
+                            st.info(f"No {sheet_name} data for {sel_date}.")
+                except Exception:
+                    st.info(f"Could not load details for {sel_date}.")
 
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([

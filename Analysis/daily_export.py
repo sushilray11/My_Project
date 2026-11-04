@@ -405,10 +405,10 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
             if not (0 <= gap <= 2.5):
                 continue
 
-            # hard filter: pullback 3–25% from 20D high
+            # hard filter: pullback must not be too deep (downtrend risk)
             hi20 = max(hs[-20:]) if len(hs) >= 20 else max(hs)
             pb   = (hi20 - p) / hi20 * 100
-            if not (3 <= pb <= 25):
+            if not (3 <= pb <= 15):
                 continue
 
             # RSI (Wilder's)
@@ -455,8 +455,8 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
             vol_surge = bool(avgv and v[-1] > avgv * 1.5 and c[-1] > c[-2])
             vol_cond  = vol_quiet or vol_surge
 
-            # 7. RSI reset 35–70
-            rsi_reset = 35 <= rsi <= 70
+            # 7. RSI reset: cooled to bottom zone (30–55)
+            rsi_reset = 30 <= rsi <= 55
 
             # 8. Lows stable: recent actual lows not making lower lows
             lows_stable = bool(len(l) >= 8 and min(l[-3:]) >= min(l[-8:-3]))
@@ -476,11 +476,15 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
             break_up = bool(c[-1] > base_top and avgv and v[-1] > avgv * 1.2)
             entry    = vol_exp or break_up
 
+            # 11. Near 52W low: within 15% of 52-week low (structural floor)
+            low52w   = min(l[-252:]) if len(l) >= 252 else min(l)
+            near_52w = (p - low52w) / max(low52w, 1) <= 0.15
+
             score = sum([at_sup, prior_up, confluence, proven_sup,
                          base_forming, vol_cond, rsi_reset,
-                         lows_stable, reversal, entry])
+                         lows_stable, reversal, entry, near_52w])
 
-            if score >= 5:
+            if score >= 6:
                 buy_lo   = round(near * 0.99, 2)
                 buy_hi   = round(near * 1.02, 2)
                 stop     = round(near * 0.97, 2)
@@ -518,15 +522,16 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
                     "Lows Stable": "Yes" if lows_stable else "No",
                     "Reversal":    "Yes" if reversal    else "No",
                     "Entry Trigger":"Yes" if entry      else "No",
+                    "Near 52W Low":"Yes" if near_52w   else "No",
                     "Buy Zone": f"₹{buy_lo}–{buy_hi}",
                     "Target (₹)": tgt, "Stop (₹)": stop,
-                    "R:R": rr, "Score /10": score,
+                    "R:R": rr, "Score /11": score,
                     "Chart": f"https://www.tradingview.com/chart/?symbol=NSE:{nse}",
                 })
         except Exception:
             pass
     df = (pd.DataFrame(rows)
-          .sort_values(["Score /10", "R:R", "Gap %"], ascending=[False, False, True])
+          .sort_values(["Score /11", "R:R", "Gap %"], ascending=[False, False, True])
           .head(15).reset_index(drop=True))
     df.index += 1
     return df
@@ -822,7 +827,7 @@ def update_consolidated_history(results: dict):
 
     SCORE_COL = {
         "Probable Upside":        "Score /10",
-        "Support Entry":          "Score /10",
+        "Support Entry":          "Score /11",
         "Consolidation Breakout": "Score /10",
     }
 
