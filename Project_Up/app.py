@@ -397,59 +397,10 @@ def _write_formatted_excel(path, sheets):
             ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
     wb.save(path)
 
-def _save_history(rows, top_n=15, keep_days=60, prefix="", sort_cols=None):
-    if not rows:
-        return
-    d = _dt.date.today()
-    while d.weekday() >= 5:
-        d -= _dt.timedelta(days=1)
-    today = prefix + str(d)
-    hist_path = _os.path.join(_DIR, "history.xlsx")
-
-    df = pd.DataFrame(rows)
-    if sort_cols is None:
-        sort_cols = ["Score /10", "Vol Ratio", "Mkt Cap (Cr)"]
-    valid_sort = [c for c in sort_cols if c in df.columns]
-    df_new = df.sort_values(valid_sort, ascending=False).head(top_n).astype(str)
-
-    # Load existing sheets — keep only those matching the same prefix
-    existing = {}
-    if _os.path.exists(hist_path):
-        try:
-            xl = pd.ExcelFile(hist_path)
-            for sheet in xl.sheet_names:
-                if sheet.startswith(prefix):
-                    existing[sheet] = xl.parse(sheet, dtype=str)
-        except Exception:
-            pass
-
-    existing[today] = df_new
-
-    # Keep last keep_days sheets for this prefix
-    sorted_dates = sorted(existing.keys())[-keep_days:]
-    sheets_this  = {d: existing[d] for d in sorted_dates}
-
-    # Merge with other-prefix sheets already in the file
-    all_sheets = {}
-    if _os.path.exists(hist_path):
-        try:
-            xl2 = pd.ExcelFile(hist_path)
-            for sheet in xl2.sheet_names:
-                if not sheet.startswith(prefix):
-                    all_sheets[sheet] = xl2.parse(sheet, dtype=str)
-        except Exception:
-            pass
-    all_sheets.update(sheets_this)
-
-    try:
-        _write_formatted_excel(hist_path, all_sheets)
-    except Exception:
-        df_new.to_excel(hist_path, index=False)
-
 # ── Main UI ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-body">', unsafe_allow_html=True)
 
-tab1, tab4, tab5, tab2, tab3 = st.tabs(["🚀 Upside Setup", "🔍 Bottom Formation", "📦 Consolidation", "🏆 Top Performers", "📊 Backtest (Last 10 Days)"])
+tab1, tab4, tab5, tab2, tab3, tab6 = st.tabs(["🚀 Upside Setup", "🔍 Bottom Formation", "📦 Consolidation", "🏆 Top Performers", "📊 Backtest (Last 10 Days)", "📅 History"])
 
 # ── TAB 1: SCREENER ────────────────────────────────────────────────────────────
 with tab1:
@@ -588,7 +539,7 @@ with tab1:
                         rr       = round(reward / risk, 1) if risk > 0 else 0.0
 
                         rows.append({
-                            "Stock":          sym,
+                            "Stock":          f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
                             "Company":        names.get(sym, sym),
                             "Price (₹)":      round(price, 2),
                             "Mkt Cap (Cr)":   round(mc / 1e7),
@@ -604,13 +555,11 @@ with tab1:
                             "Target (₹)":    target,
                             "Stop (₹)":      stop,
                             "R:R":            rr,
-                            "Chart":          f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
                         })
                 except Exception:
                     pass
 
             st.session_state["up_data"] = rows
-            _save_history(rows)
             st.session_state["up_universe_count"] = len(tickers)
             st.session_state["up_ema_count"]      = len(ema200_pass)
             st.session_state["up_mcap_count"]     = len(mcap_pass)
@@ -653,7 +602,7 @@ with tab1:
                 use_container_width=True,
                 height=min(700, 56 + len(df) * 35),
                 column_config={
-                    "Stock":          st.column_config.TextColumn("Stock", pinned=True),
+                    "Stock":          st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                     "Company":        st.column_config.TextColumn("Company"),
                     "Price (₹)":     st.column_config.NumberColumn("Price (₹)",       format="₹%.2f"),
                     "Mkt Cap (Cr)":  st.column_config.NumberColumn("Mkt Cap (Cr)",    format="₹%,d Cr"),
@@ -669,7 +618,6 @@ with tab1:
                     "Target (₹)":   st.column_config.NumberColumn("Target (₹)",      format="₹%.2f"),
                     "Stop (₹)":     st.column_config.NumberColumn("Stop (₹)",        format="₹%.2f"),
                     "R:R":           st.column_config.NumberColumn("Reward:Risk",     format="%.1f:1"),
-                    "Chart":         st.column_config.LinkColumn("TradingView",       display_text="📈 Chart"),
                 },
             )
 
@@ -797,20 +745,19 @@ with tab2:
                             .apply(lambda x: f"₹{x:,.2f}" if pd.notna(x) else "")
                         )
 
-                    # Add TradingView chart link
-                    df_show["Chart"] = df_show["Stock"].apply(
+                    # Make stock name a clickable TradingView link
+                    df_show["Stock"] = df_show["Stock"].apply(
                         lambda s: f"https://www.tradingview.com/chart/?symbol=NSE:{s}"
                     )
 
                     # Keep only useful columns in a clean order
-                    keep = [c for c in ["Stock", "Change %", "Price (₹)", "Chart"] if c in df_show.columns]
+                    keep = [c for c in ["Stock", "Change %", "Price (₹)"] if c in df_show.columns]
                     df_show = df_show[keep]
 
                     col_cfg = {
-                        "Stock":     st.column_config.TextColumn("Stock"),
+                        "Stock":     st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                         "Change %":  st.column_config.TextColumn("Change %"),
                         "Price (₹)": st.column_config.TextColumn("Price (₹)"),
-                        "Chart":     st.column_config.LinkColumn("Chart", display_text="📈 View"),
                     }
 
                     st.dataframe(
@@ -1200,7 +1147,7 @@ with tab4:
                             mcap_cr = round(mcap_data[sym_ns]["mcap"] / 1e7)
                             sym     = sym_ns.replace(".NS", "")
                             bottom_rows.append({
-                                "Stock":           sym,
+                                "Stock":           f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
                                 "Company":         names_map.get(sym, sym),
                                 "Price (₹)":      round(price, 2),
                                 "% off Peak":      round(pct_off_high, 1),
@@ -1213,7 +1160,6 @@ with tab4:
                                 "% from 200 EMA":  pct_from_e200,
                                 "Score /9":        score,
                                 "Mkt Cap (Cr)":    mcap_cr,
-                                "Chart":           f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
                             })
                         except Exception:
                             pass
@@ -1256,7 +1202,7 @@ with tab4:
                 use_container_width=True,
                 height=min(800, 56 + len(df_bot) * 35),
                 column_config={
-                    "Stock":           st.column_config.TextColumn("Stock",          pinned=True),
+                    "Stock":           st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                     "Company":         st.column_config.TextColumn("Company"),
                     "Price (₹)":      st.column_config.NumberColumn("Price (₹)",     format="₹%.2f"),
                     "% off Peak":      st.column_config.NumberColumn("% off Peak",    format="%.1f%%"),
@@ -1269,7 +1215,6 @@ with tab4:
                     "% from 200 EMA":  st.column_config.NumberColumn("% from 200 EMA",format="%.1f%%"),
                     "Score /9":        st.column_config.NumberColumn("Score /9",      format="%d ⭐"),
                     "Mkt Cap (Cr)":    st.column_config.NumberColumn("Mkt Cap (Cr)",  format="₹%,d Cr"),
-                    "Chart":           st.column_config.LinkColumn("TradingView",     display_text="📈 Chart"),
                 },
             )
 
@@ -1441,7 +1386,7 @@ with tab5:
                             mcap_cr       = round(mcap_data[sym_ns]["mcap"] / 1e7)
                             sym           = sym_ns.replace(".NS", "")
                             consol_rows.append({
-                                "Stock":          sym,
+                                "Stock":          f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
                                 "Company":        names_map.get(sym, sym),
                                 "Price (₹)":     round(price, 2),
                                 "Range 20D %":    round(range_20d, 1),
@@ -1454,7 +1399,6 @@ with tab5:
                                 "% from High":    round(pct_from_high, 1),
                                 "Score /9":       score,
                                 "Mkt Cap (Cr)":   mcap_cr,
-                                "Chart":          f"https://www.tradingview.com/chart/?symbol=NSE:{sym}",
                             })
                         except Exception:
                             pass
@@ -1497,7 +1441,7 @@ with tab5:
                 use_container_width=True,
                 height=min(800, 56 + len(df_con) * 35),
                 column_config={
-                    "Stock":          st.column_config.TextColumn("Stock",           pinned=True),
+                    "Stock":          st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                     "Company":        st.column_config.TextColumn("Company"),
                     "Price (₹)":     st.column_config.NumberColumn("Price (₹)",      format="₹%.2f"),
                     "Range 20D %":    st.column_config.NumberColumn("Range 20D",      format="%.1f%%"),
@@ -1510,7 +1454,6 @@ with tab5:
                     "% from High":    st.column_config.NumberColumn("% from 52W High", format="%.1f%%"),
                     "Score /9":       st.column_config.NumberColumn("Score /9",        format="%d ⭐"),
                     "Mkt Cap (Cr)":   st.column_config.NumberColumn("Mkt Cap (Cr)",    format="₹%,d Cr"),
-                    "Chart":          st.column_config.LinkColumn("TradingView",        display_text="📈 Chart"),
                 },
             )
 
@@ -1543,4 +1486,122 @@ with tab5:
             st.info("No consolidation setups found right now. Try again after market close.")
 
 st.markdown("</div>", unsafe_allow_html=True)
+
+# ── History tab ────────────────────────────────────────────────────────────────
+def _parse_history_sections(xl, sheet):
+    """Parse a combined history sheet into 3 section DataFrames.
+    Handles two formats:
+      - Combined (daily_run.py): section title row → header row → data rows, repeated 3×
+      - Simple (app.py save): header row directly at row 0 → data rows (Upside Setup only)
+    """
+    raw = xl.parse(sheet, header=None, dtype=str).fillna("")
+    sections = {}
+    i = 0
+    found_any_section = False
+
+    while i < len(raw):
+        cell0 = str(raw.iloc[i, 0]).strip()
+        # Detect section title rows (combined format from daily_run.py)
+        for key, keyword in [("Upside Setup", "UPSIDE"), ("Bottom Formation", "BOTTOM"), ("Consolidation", "CONSOLIDATION")]:
+            if keyword in cell0.upper():
+                found_any_section = True
+                if i + 1 < len(raw):
+                    headers = [str(v).strip() for v in raw.iloc[i + 1]]
+                    data_rows = []
+                    j = i + 2
+                    while j < len(raw):
+                        row_vals = [str(v).strip() for v in raw.iloc[j]]
+                        if all(v == "" or v == "nan" for v in row_vals):
+                            break
+                        data_rows.append(row_vals)
+                        j += 1
+                    if data_rows:
+                        df = pd.DataFrame(data_rows, columns=headers[:len(data_rows[0])])
+                        if "Stock" in df.columns:
+                            df = df[df["Stock"].str.strip().str.len() > 0]
+                            df = df[df["Stock"] != "Stock"]
+                        sections[key] = df.reset_index(drop=True)
+                break
+        i += 1
+
+    # Fallback: simple format — row 0 is header, no section titles
+    if not found_any_section:
+        headers = [str(v).strip() for v in raw.iloc[0]]
+        if "Stock" in headers:
+            data_rows = [list(raw.iloc[r]) for r in range(1, len(raw))]
+            df = pd.DataFrame(data_rows, columns=headers[:len(data_rows[0]) if data_rows else len(headers)])
+            df = df[df["Stock"].str.strip().str.len() > 0]
+            df = df[df["Stock"] != "Stock"]
+            sections["Upside Setup"] = df.reset_index(drop=True)
+
+    return sections
+
+
+def _history_tab():
+    hist_path = _os.path.join(_DIR, "history.xlsx")
+    if not _os.path.exists(hist_path):
+        st.info("No history yet — run the Upside Setup screener first.")
+        return
+
+    xl = pd.ExcelFile(hist_path)
+    date_sheets = sorted(xl.sheet_names)
+    last10 = list(reversed(date_sheets[-10:]))   # newest first
+
+    # Parse all sections for all dates
+    all_sections = {}
+    for sheet in last10:
+        try:
+            all_sections[sheet] = _parse_history_sections(xl, sheet)
+        except Exception:
+            all_sections[sheet] = {}
+
+    section_names = ["Upside Setup", "Bottom Formation", "Consolidation"]
+    htab1, htab2, htab3 = st.tabs(["🚀 Upside Setup", "🔍 Bottom Formation", "📦 Consolidation"])
+
+    for htab, sec_name in zip([htab1, htab2, htab3], section_names):
+        with htab:
+            # Build pivot: rows=Rank, columns=dates
+            max_rank = max(
+                (len(all_sections[d].get(sec_name, pd.DataFrame())) for d in last10),
+                default=0
+            )
+            if max_rank == 0:
+                st.info(f"No {sec_name} history data yet.")
+                continue
+
+            rows = []
+            for rank in range(1, max_rank + 1):
+                row = {"Rank": rank}
+                for date in last10:
+                    df = all_sections[date].get(sec_name, pd.DataFrame())
+                    if not df.empty and rank - 1 < len(df):
+                        r = df.iloc[rank - 1]
+                        ticker = str(r.get("Stock", "")).strip()
+                        score_col = next((c for c in ["Score /10", "Score /9"] if c in df.columns), None)
+                        score  = str(r.get(score_col, "")).strip() if score_col else ""
+                        row[date[:10]] = f"{ticker}  ·  {score}" if score else ticker
+                    else:
+                        row[date[:10]] = "—"
+                rows.append(row)
+
+            pivot = pd.DataFrame(rows).set_index("Rank")
+            st.caption(f"Top picks across the last {len(last10)} sessions · newest left. Click a date below to see full details.")
+            st.dataframe(pivot, use_container_width=True, height=560)
+
+            st.markdown("---")
+            selected = st.selectbox("Full details for date", last10, index=0, key=f"hist_sel_{sec_name}")
+            df_detail = all_sections.get(selected, {}).get(sec_name, pd.DataFrame())
+            if not df_detail.empty:
+                show_cols = [c for c in df_detail.columns if c.lower() not in ("chart", "")]
+                df_out = df_detail[show_cols].copy().reset_index(drop=True)
+                df_out.index += 1
+                df_out.index.name = "Rank"
+                st.dataframe(df_out, use_container_width=True, height=560)
+            else:
+                st.info("No data for this date.")
+
+
+with tab6:
+    _history_tab()
+
 st.markdown("</div>", unsafe_allow_html=True)

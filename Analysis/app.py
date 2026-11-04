@@ -704,15 +704,15 @@ def _fno_tab():
             st.session_state["fno_prices"] = _fetch_fno_prices()
 
     fno_df = pd.DataFrame([{
-        "Stock":   nse_sym,
+        "Stock":   f"https://www.tradingview.com/chart/?symbol=NSE:{nse_sym}",
         "Company": name,
-        "Chart":   f"https://www.tradingview.com/chart/?symbol=NSE:{nse_sym}",
+        "_sym":    nse_sym,
     } for _, nse_sym, name in _FNO])
 
     _prices = st.session_state.get("fno_prices", {})
     if _prices:
-        fno_df["Price (₹)"] = fno_df["Stock"].map(lambda s: _prices.get(s, (None, None))[0])
-        fno_df["Day (%)"]   = fno_df["Stock"].map(lambda s: _prices.get(s, (None, None))[1])
+        fno_df["Price (₹)"] = fno_df["_sym"].map(lambda s: _prices.get(s, (None, None))[0])
+        fno_df["Day (%)"]   = fno_df["_sym"].map(lambda s: _prices.get(s, (None, None))[1])
 
     _fno_search = st.text_input(
         "🔍 Search by symbol or company",
@@ -722,15 +722,16 @@ def _fno_tab():
     if _fno_search.strip():
         _q = _fno_search.strip()
         _mask = (
-            fno_df["Stock"].str.contains(_q, case=False, na=False)
+            fno_df["_sym"].str.contains(_q, case=False, na=False)
             | fno_df["Company"].str.contains(_q, case=False, na=False)
         )
         fno_df = fno_df[_mask].reset_index(drop=True)
 
+    fno_df = fno_df.drop(columns=["_sym"])
+
     _col_cfg = {
-        "Stock":   st.column_config.TextColumn("Stock"),
+        "Stock":   st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
         "Company": st.column_config.TextColumn("Company"),
-        "Chart":   st.column_config.LinkColumn("TradingView", display_text="📈 Chart"),
     }
     if _prices:
         _col_cfg["Price (₹)"] = st.column_config.NumberColumn("Price (₹)", format="₹%.2f")
@@ -1834,12 +1835,11 @@ def _show_industry_stocks_dialog(industry_name, stock_rows):
         return f"{'+'if v>=0 else ''}{v:.2f}%"
 
     _s_df = pd.DataFrame([{
-        "Symbol":  r["Symbol"],
+        "Symbol":  f"https://www.tradingview.com/chart/?symbol=NSE:{r['Symbol']}",
         "Company": r["Company"],
         "1D (%)":  _dp(r["1D (%)"]),
         "1W (%)":  _dp(r["1W (%)"]),
         "1M (%)":  _dp(r["1M (%)"]),
-        "Chart":   f"https://www.tradingview.com/chart/?symbol=NSE:{r['Symbol']}",
     } for r in stock_rows])
 
     st.dataframe(
@@ -1847,16 +1847,15 @@ def _show_industry_stocks_dialog(industry_name, stock_rows):
         use_container_width=True,
         height=min(600, 56 + len(_s_df) * 38),
         column_config={
-            "Symbol":  st.column_config.TextColumn("Symbol"),
+            "Symbol":  st.column_config.LinkColumn("Symbol", display_text=r"symbol=NSE:([^&]+)", pinned=True),
             "Company": st.column_config.TextColumn("Company"),
             "1D (%)":  st.column_config.TextColumn("1D (%)"),
             "1W (%)":  st.column_config.TextColumn("1W (%)"),
             "1M (%)":  st.column_config.TextColumn("1M (%)"),
-            "Chart":   st.column_config.LinkColumn("Chart", display_text="📈"),
         },
         hide_index=True,
     )
-    st.caption("Sorted by 1M return · click 📈 to open TradingView chart")
+    st.caption("Sorted by 1M return · click symbol to open TradingView chart")
 
 
 @st.fragment
@@ -1955,8 +1954,8 @@ def _industry_tab():
                         "vs CNX500 1M":  _vs1m,
                     })
 
-                # Sort by 1M return descending (best performers first)
-                _industry_rows.sort(key=lambda r: r["1M (%)"] if r["1M (%)"] is not None else -999, reverse=True)
+                # Sort by 1W return descending (best performers first)
+                _industry_rows.sort(key=lambda r: r["1W (%)"] if r["1W (%)"] is not None else -999, reverse=True)
 
                 st.session_state["industry_perf_data"] = {
                     "rows":               _industry_rows,

@@ -1217,24 +1217,33 @@ if buy_alerts:
         sym = a['ticker'].replace(".NS", "").replace(".BO", "")
         url = f"https://www.tradingview.com/chart/?symbol=NSE:{sym}"
         return (
-            f"<div style='display:flex;justify-content:space-between;padding:4px 0;"
-            f"border-bottom:1px solid #1e3a1e;font-size:12px;'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:center;"
+            f"padding:3px 0;border-bottom:1px solid #1e3a1e;font-size:11px;gap:6px'>"
             f"<a href='{url}' target='_blank' style='color:#86efac;font-weight:600;"
-            f"text-decoration:none;border-bottom:1px dashed #4ade8066'>{a['name'][:22]}</a>"
-            f"<span style='color:#4ade80;margin-left:8px'>₹{a['price']:,.2f}</span></div>"
+            f"text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>{a['name'][:16]}</a>"
+            f"<span style='color:#4ade80;font-size:10px;white-space:nowrap'>₹{a['price']:,.2f}</span></div>"
         )
-    rows_html = "".join(_alert_row(a) for a in buy_alerts)
+
+    # Split into two columns
+    mid = (len(buy_alerts) + 1) // 2
+    col1_html = "".join(_alert_row(a) for a in buy_alerts[:mid])
+    col2_html = "".join(_alert_row(a) for a in buy_alerts[mid:])
+    rows_html = (
+        f"<div style='display:grid;grid-template-columns:1fr 1fr;gap:0 6px;"
+        f"border-top:1px solid #1e3a1e;margin-top:4px;padding-top:4px'>"
+        f"<div>{col1_html}</div><div>{col2_html}</div></div>"
+    )
     scanned_at = time.strftime("%H:%M", time.localtime(last_scan_t)) if last_scan_t else "—"
     panel_html = f"""
     <div style="position:fixed;top:60px;right:12px;z-index:9999;
                 background:#052e16;border:1px solid #166534;border-radius:10px;
-                padding:12px 14px;min-width:220px;max-width:260px;
+                padding:12px 14px;min-width:320px;max-width:380px;
                 box-shadow:0 4px 20px rgba(0,0,0,0.5);">
       <div style="font-size:11px;color:#86efac;letter-spacing:1px;
                   font-weight:700;margin-bottom:2px;">
         🟢 ALERT &nbsp;·&nbsp; {len(buy_alerts)} BUY signals
       </div>
-      <div style="font-size:10px;color:#4ade80;opacity:0.75;margin-bottom:6px;">
+      <div style="font-size:10px;color:#4ade80;opacity:0.75;margin-bottom:4px;">
         Short Term · 1d
       </div>
       {rows_html}
