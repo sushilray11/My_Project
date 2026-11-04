@@ -1,5 +1,9 @@
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
+try:
+    from streamlit_autorefresh import st_autorefresh
+    _has_autorefresh = True
+except ImportError:
+    _has_autorefresh = False
 
 st.set_page_config(page_title="NSE Trading Dashboard", page_icon="📈", layout="wide")
 
@@ -8,8 +12,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Refresh market ticker every 5 minutes
-st_autorefresh(interval=300_000, key="home_ticker_refresh")
+# Refresh market ticker every 5 minutes (if package available)
+if _has_autorefresh:
+    st_autorefresh(interval=300_000, key="home_ticker_refresh")
 
 # ── Top row: title + Nifty/Sensex ticker ─────────────────────────────────────
 _hdr_col, _ticker_col = st.columns([3, 1])
