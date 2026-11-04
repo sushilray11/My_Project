@@ -1535,17 +1535,16 @@ elif page == "🔍  Stock Scanner":
         return styles
 
     def render_table(rows, key_prefix):
-        """Render scan results with a TradingView chart link column."""
+        """Render scan results with clickable company name linking to TradingView."""
         df_display = pd.DataFrame([{
             "Signal"   : r["Signal"],
-            "Company"  : r["Company"],
+            "Company"  : f"https://www.tradingview.com/chart/?symbol=NSE:{r['Ticker'].replace('.NS','').replace('.BO','')}",
             "Ticker"   : r["Ticker"],
             "Price ₹"  : f"₹{r['Price ₹']:,.2f}",
             "RSI"      : r["RSI"],
             "EMA9"     : f"{r['EMA9']:,.2f}",
             "EMA21"    : f"{r['EMA21']:,.2f}",
             "Vol/Avg"  : r["Vol / Avg"],
-            "Chart"    : f"https://www.tradingview.com/chart/?symbol=NSE:{r['Ticker'].replace('.NS','').replace('.BO','')}",
         } for r in rows])
 
         st.dataframe(
@@ -1556,9 +1555,9 @@ elif page == "🔍  Stock Scanner":
             height=min(500, 38 + len(rows) * 35),
             hide_index=True,
             column_config={
-                "Chart": st.column_config.LinkColumn(
-                    "Chart",
-                    display_text="📈 View",
+                "Company": st.column_config.LinkColumn(
+                    "Company",
+                    display_text=r"symbol=NSE:([^&]+)",
                     help="Open on TradingView",
                 )
             }
