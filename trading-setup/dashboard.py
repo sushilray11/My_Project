@@ -1430,8 +1430,8 @@ if page == "📊  Chart & Backtest":
 
         st.dataframe(
             display.style
-                .applymap(color_pnl,  subset=["pnl_%"])
-                .applymap(color_side, subset=["side"]),
+                .apply(lambda col: col.map(color_pnl),  axis=0, subset=["pnl_%"])
+                .apply(lambda col: col.map(color_side), axis=0, subset=["side"]),
             use_container_width=True,
             height=min(400, 38 + len(display) * 35),
         )
@@ -1541,7 +1541,7 @@ elif page == "🔍  Stock Scanner":
 
         st.dataframe(
             df_display.style
-                .applymap(highlight_signal, subset=["Signal"])
+                .apply(lambda col: col.map(highlight_signal), axis=0, subset=["Signal"])
                 .apply(highlight_rsi_row, axis=1),
             use_container_width=True,
             height=min(500, 38 + len(rows) * 35),
