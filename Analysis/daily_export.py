@@ -13,6 +13,38 @@ import pandas as pd
 import yfinance as yf
 import requests
 
+def _nse_market_open():
+    """True if NSE regular session is currently running (9:15–15:30 IST, Mon–Fri)."""
+    try:
+        import pytz
+        from datetime import time as dtime
+        ist  = pytz.timezone("Asia/Kolkata")
+        now  = datetime.datetime.now(ist)
+        if now.weekday() >= 5:
+            return False
+        t = now.time()
+        return dtime(9, 15) <= t <= dtime(15, 30)
+    except Exception:
+        return False
+
+def _fetch_live_prices(tickers):
+    """Download latest 5-min bar for each ticker; return {NSE_sym: price}."""
+    result = {}
+    try:
+        data = yf.download(tickers, period="1d", interval="5m",
+                           auto_adjust=True, progress=False, prepost=False)
+        if data.empty:
+            return result
+        close_df = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data[["Close"]]
+        for col in close_df.columns:
+            nse = str(col).replace(".NS", "")
+            series = close_df[col].dropna()
+            if not series.empty:
+                result[nse] = float(series.iloc[-1])
+    except Exception:
+        pass
+    return result
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 EXPORTS_DIR = os.path.join(SCRIPT_DIR, "exports")
@@ -242,7 +274,8 @@ def calc_ema(prices, n):
 # ── Screener 1: Probable Upside ───────────────────────────────────────────────
 _UPSIDE_BLACKLIST = set()
 
-def run_probable_upside(fno, close_df, vol_df, low_df):
+def run_probable_upside(fno, close_df, vol_df, low_df, live_prices=None):
+    live_prices = live_prices or {}
     rows = []
     for sym, nse, name in fno:
         if nse in _UPSIDE_BLACKLIST:
@@ -259,7 +292,7 @@ def run_probable_upside(fno, close_df, vol_df, low_df):
             if len(cls) < 60 or len(lows) < 11 or len(vols) < 20:
                 continue
 
-            cur    = cls[-1]
+            cur    = live_prices.get(nse, cls[-1])
             sma20  = sum(cls[-20:]) / 20
             sma50  = sum(cls[-min(50, len(cls)):]) / min(50, len(cls))
             sma200 = sum(cls[-200:]) / 200 if len(cls) >= 200 else sum(cls) / len(cls)
@@ -360,7 +393,8 @@ def run_probable_upside(fno, close_df, vol_df, low_df):
     return df
 
 # ── Screener 2: Support Entry ─────────────────────────────────────────────────
-def run_support_entry(fno, close_df, low_df, high_df, vol_df):
+def run_support_entry(fno, close_df, low_df, high_df, vol_df, live_prices=None):
+    live_prices = live_prices or {}
     rows = []
     for _, nse, _ in fno:
         try:
@@ -372,7 +406,7 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
             v   = list(vol_df[tk].reindex(cs.index).fillna(0).astype(float))
             if len(c) < 60 or len(l) < 10 or len(hs) < 10 or len(v) < 20:
                 continue
-            p    = c[-1]
+            p    = live_prices.get(nse, c[-1])
             avgv = sum(v[-20:]) / 20 if len(v) >= 20 else 0
 
             sm20  = sum(c[-20:]) / 20
@@ -537,7 +571,8 @@ def run_support_entry(fno, close_df, low_df, high_df, vol_df):
     return df
 
 # ── Screener 3: Consolidation Breakout ────────────────────────────────────────
-def run_consolidation(fno, close_df, high_df, low_df, vol_df):
+def run_consolidation(fno, close_df, high_df, low_df, vol_df, live_prices=None):
+    live_prices = live_prices or {}
     rows = []
     for _, nse, _ in fno:
         try:
@@ -549,7 +584,7 @@ def run_consolidation(fno, close_df, high_df, low_df, vol_df):
             v   = list(vol_df[tk].reindex(cs.index).fillna(0).astype(float))
             if len(c) < 35 or len(l) < 30:
                 continue
-            p = c[-1]
+            p = live_prices.get(nse, c[-1])
             range10   = (max(h[-10:]) - min(l[-10:])) / p * 100
             range30   = (max(h[-30:]) - min(l[-30:])) / p * 100
             sma50_pre = sum(c[-min(50, len(c)):]) / min(50, len(c))
@@ -967,13 +1002,22 @@ if __name__ == "__main__":
     vol_df   = hist["Volume"]
     log("Download complete. Running screeners…")
 
-    df1 = run_probable_upside(FNO, close_df, vol_df, low_df)
+    # Live prices if market is currently open (script runs at 3 PM IST, 30 min before close)
+    live_prices = {}
+    if _nse_market_open():
+        log("Market open — fetching live 5-min prices…")
+        live_prices = _fetch_live_prices(tickers)
+        log(f"Live prices fetched for {len(live_prices)} stocks")
+    else:
+        log("Market closed — using last session close for current price")
+
+    df1 = run_probable_upside(FNO, close_df, vol_df, low_df, live_prices)
     log(f"Probable Upside:        {len(df1)} candidates")
 
-    df2 = run_support_entry(FNO, close_df, low_df, high_df, vol_df)
+    df2 = run_support_entry(FNO, close_df, low_df, high_df, vol_df, live_prices)
     log(f"Support Entry:          {len(df2)} candidates")
 
-    df3 = run_consolidation(FNO, close_df, high_df, low_df, vol_df)
+    df3 = run_consolidation(FNO, close_df, high_df, low_df, vol_df, live_prices)
     log(f"Consolidation Breakout: {len(df3)} candidates")
 
     write_master_excel({

@@ -249,6 +249,47 @@ def _fetch_universe():
     return [], {}, "Error"
 
 # ── Price history download (cached 1 hour so page refreshes don't re-download) ─
+
+def _nse_market_open():
+    """True if NSE regular session is running (9:15–15:30 IST, Mon–Fri)."""
+    try:
+        import pytz, datetime as _datetime
+        from datetime import time as dtime
+        ist = pytz.timezone("Asia/Kolkata")
+        now = _datetime.datetime.now(ist)
+        if now.weekday() >= 5:
+            return False
+        t = now.time()
+        return dtime(9, 15) <= t <= dtime(15, 30)
+    except Exception:
+        return False
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _fetch_live_intraday(tickers_tuple):
+    """Download today's 5-min bars; return {sym_ns: price}."""
+    import yfinance as yf
+    result = {}
+    tickers = list(tickers_tuple)
+    BATCH = 400
+    try:
+        for i in range(0, len(tickers), BATCH):
+            batch = tickers[i:i+BATCH]
+            try:
+                data = yf.download(batch, period="1d", interval="5m",
+                                   auto_adjust=True, progress=False, prepost=False, threads=True)
+                if data.empty:
+                    continue
+                close_df = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data[["Close"]]
+                for col in close_df.columns:
+                    s = close_df[col].dropna()
+                    if not s.empty:
+                        result[str(col)] = float(s.iloc[-1])
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return result
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _download_price_history(tickers_tuple):
     import yfinance as yf
@@ -429,6 +470,15 @@ with tab1:
             with st.spinner("Downloading price history (cached for 1 hour)…"):
                 all_close, all_high, all_low, all_vol, all_open = _download_price_history(tuple(tickers))
 
+            # Live prices during market hours
+            _live_up = {}
+            if _nse_market_open():
+                with st.spinner("Fetching live prices…"):
+                    _live_up = _fetch_live_intraday(tuple(tickers))
+                st.caption(f"🟢 Live prices active for {len(_live_up)} stocks")
+            else:
+                st.caption("🕐 Market closed — using last session close")
+
             ema200_pass = []
             for sym_ns in all_close:
                 c = all_close[sym_ns]
@@ -468,7 +518,7 @@ with tab1:
                     if len(c) < 60 or len(h) < 11 or len(l) < 11 or len(v) < 20:
                         continue
 
-                    price = c[-1]
+                    price = _live_up.get(sym_ns, c[-1])
                     e200  = _ema_val(c, 200)
                     e20   = _ema_val(c, 20)
                     e50   = _ema_val(c, 50)
@@ -1044,6 +1094,15 @@ with tab4:
 
             st.info(f"Scanning **{len(candidates)} stocks** for bottom formation setups…")
 
+            # Live prices during market hours for bottom tab
+            _live_bot = {}
+            if _nse_market_open():
+                with st.spinner("Fetching live prices…"):
+                    _live_bot = _fetch_live_intraday(tuple(candidates))
+                st.caption(f"🟢 Live prices active for {len(_live_bot)} stocks")
+            else:
+                st.caption("🕐 Market closed — using last session close")
+
             BATCH = 200
             batches = [candidates[i:i+BATCH] for i in range(0, len(candidates), BATCH)]
             prog = st.progress(0, text="Downloading price data…")
@@ -1079,7 +1138,7 @@ with tab4:
                             h = list(high_df[sym_ns].dropna().astype(float))  if high_df is not None and sym_ns in high_df.columns else c
                             l = list(low_df[sym_ns].dropna().astype(float))   if low_df  is not None and sym_ns in low_df.columns  else c
 
-                            price  = c[-1]
+                            price  = _live_bot.get(sym_ns, c[-1])
                             high52 = max(h[-252:]) if len(h) >= 252 else max(h)
                             low52  = min(l[-252:]) if len(l) >= 252 else min(l)
 
@@ -1277,6 +1336,15 @@ with tab5:
 
             st.info(f"Scanning **{len(candidates)} stocks** for consolidation setups…")
 
+            # Live prices during market hours for consolidation tab
+            _live_con = {}
+            if _nse_market_open():
+                with st.spinner("Fetching live prices…"):
+                    _live_con = _fetch_live_intraday(tuple(candidates))
+                st.caption(f"🟢 Live prices active for {len(_live_con)} stocks")
+            else:
+                st.caption("🕐 Market closed — using last session close")
+
             BATCH = 200
             batches = [candidates[i:i+BATCH] for i in range(0, len(candidates), BATCH)]
             prog = st.progress(0, text="Downloading price data…")
@@ -1312,7 +1380,7 @@ with tab5:
                             h = list(high_df[sym_ns].dropna().astype(float))  if high_df is not None and sym_ns in high_df.columns else c
                             l = list(low_df[sym_ns].dropna().astype(float))   if low_df  is not None and sym_ns in low_df.columns  else c
 
-                            price = c[-1]
+                            price = _live_con.get(sym_ns, c[-1])
                             e200  = _ema_val(c, 200) if len(c) >= 200 else None
                             e50   = _ema_val(c, 50)
                             e20   = _ema_val(c, 20)
@@ -1596,7 +1664,15 @@ def _history_tab():
                 df_out = df_detail[show_cols].copy().reset_index(drop=True)
                 df_out.index += 1
                 df_out.index.name = "Rank"
-                st.dataframe(df_out, use_container_width=True, height=560)
+                _det_col_cfg = {}
+                if "Stock" in df_out.columns:
+                    df_out["Stock"] = df_out["Stock"].apply(
+                        lambda s: f"https://www.tradingview.com/chart/?symbol=NSE:{s}" if s else s
+                    )
+                    _det_col_cfg["Stock"] = st.column_config.LinkColumn(
+                        "Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True
+                    )
+                st.dataframe(df_out, column_config=_det_col_cfg, use_container_width=True, height=560)
             else:
                 st.info("No data for this date.")
 

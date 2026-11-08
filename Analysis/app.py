@@ -631,6 +631,40 @@ _SECTOR = {
     "ATHERENERG":"Automobile","MAHABANK":"Financial Services","SAGILITY":"Healthcare",
 }
 
+def _nse_market_open():
+    """Return True if NSE regular session is currently running (9:15–15:30 IST, Mon–Fri)."""
+    try:
+        import pytz
+        from datetime import datetime, time as dtime
+        ist = pytz.timezone("Asia/Kolkata")
+        now = datetime.now(ist)
+        if now.weekday() >= 5:
+            return False
+        t = now.time()
+        return dtime(9, 15) <= t <= dtime(15, 30)
+    except Exception:
+        return False
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _fetch_live_intraday(tickers_tuple):
+    """Download today's 5-min bars; return {NSE_symbol: live_price}."""
+    import yfinance as yf
+    result = {}
+    try:
+        data = yf.download(list(tickers_tuple), period="1d", interval="5m",
+                           auto_adjust=True, progress=False, prepost=False)
+        if data.empty:
+            return result
+        close_df = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data[["Close"]]
+        for col in close_df.columns:
+            nse = str(col).replace(".NS", "")
+            series = close_df[col].dropna()
+            if not series.empty:
+                result[nse] = float(series.iloc[-1])
+    except Exception:
+        pass
+    return result
+
 @st.cache_data(ttl=300, show_spinner=False)
 def _fetch_fno_prices():
     import yfinance as yf
@@ -769,6 +803,16 @@ def _upside_tab():
             _close_df2 = _hist2["Close"]
             _vol_df2   = _hist2["Volume"]
 
+            # Live prices during market hours (replaces last-close for current price only)
+            _live2 = {}
+            if _nse_market_open():
+                _tup2 = tuple(f"{s}.NS" for _, s, _ in _FNO)
+                with st.spinner("Fetching live prices…"):
+                    _live2 = _fetch_live_intraday(_tup2)
+                st.caption(f"🟢 Live prices loaded for {len(_live2)} stocks")
+            else:
+                st.caption("🕐 Market closed — using last session close")
+
             _swing_rows = []
             _UPSIDE_BLACKLIST = set()
             _prog2 = st.progress(0, text="Screening stocks…")
@@ -791,7 +835,7 @@ def _upside_tab():
                     if len(_cls) < 60 or len(_highs) < 11 or len(_lows) < 11 or len(_vols) < 20:
                         continue
 
-                    _cur    = _cls[-1]
+                    _cur    = _live2.get(_nse2, _cls[-1])  # live price if market open, else last close
                     _sma20  = sum(_cls[-20:]) / 20
                     _sma50  = sum(_cls[-min(50,  len(_cls)):]) / min(50,  len(_cls))
                     _sma200 = sum(_cls[-200:]) / 200 if len(_cls) >= 200 else sum(_cls) / len(_cls)
@@ -978,6 +1022,16 @@ def _support_tab():
             _hi3  = _dh3["High"]
             _vl3  = _dh3["Volume"]
 
+            # Live prices during market hours
+            _live3 = {}
+            if _nse_market_open():
+                _tup3 = tuple(f"{s}.NS" for _, s, _ in _FNO)
+                with st.spinner("Fetching live prices…"):
+                    _live3 = _fetch_live_intraday(_tup3)
+                st.caption(f"🟢 Live prices loaded for {len(_live3)} stocks")
+            else:
+                st.caption("🕐 Market closed — using last session close")
+
             _sup_rows = []
             _prog3 = st.progress(0, text="Scanning support levels…")
 
@@ -994,7 +1048,7 @@ def _support_tab():
                     if len(_c3) < 60 or len(_l3) < 10 or len(_h3s) < 10 or len(_v3) < 20:
                         continue
 
-                    _p3     = _c3[-1]
+                    _p3     = _live3.get(_nse3, _c3[-1])  # live price if market open, else last close
                     _avgv3  = sum(_v3[-20:]) / 20 if len(_v3) >= 20 else 0
 
                     # SMA levels
@@ -2128,7 +2182,16 @@ def _history_tab():
                                 break
                         if _detail_df is not None and not _detail_df.empty:
                             _show = [c for c in _detail_df.columns if c.lower() not in ("chart", "none", "")]
-                            st.dataframe(_detail_df[_show], use_container_width=True, height=560)
+                            _det_show = _detail_df[_show].copy()
+                            _det_col_cfg = {}
+                            if "Stock" in _det_show.columns:
+                                _det_show["Stock"] = _det_show["Stock"].apply(
+                                    lambda s: f"https://www.tradingview.com/chart/?symbol=NSE:{s}" if s else s
+                                )
+                                _det_col_cfg["Stock"] = st.column_config.LinkColumn(
+                                    "Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True
+                                )
+                            st.dataframe(_det_show, column_config=_det_col_cfg, use_container_width=True, height=560)
                         else:
                             st.info(f"No {sheet_name} data for {sel_date}.")
                 except Exception:

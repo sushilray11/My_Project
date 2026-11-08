@@ -428,13 +428,51 @@ with st.sidebar:
     run = st.button("▶ Run Backtest", type="primary", use_container_width=True)
 
     with st.expander("Risk Parameters"):
-        stop_pct   = st.slider("Stop Loss %",   min_value=0.5, max_value=6.0,  value=p["stop"],   step=0.1) / 100
-        target_pct = st.slider("Take Profit %", min_value=1.0, max_value=15.0, value=p["target"], step=0.5) / 100
-        vol_mult   = st.slider("Volume Filter (x avg)", min_value=1.0, max_value=2.0, value=p["vol"], step=0.1)
+        use_atr = st.checkbox("ATR-based SL/TP (recommended)", value=True,
+                              help="Stop-loss adapts to each stock's volatility")
+        if use_atr:
+            atr_sl_mult   = st.slider("Initial SL — ATR multiplier", min_value=0.5, max_value=3.0, value=1.5, step=0.1)
+            use_trailing  = st.checkbox("Trailing stop (ride the full trend)", value=True,
+                                        help="SL ratchets up as price rises — no fixed TP, exits only when trend reverses")
+            if use_trailing:
+                atr_trail_mult = st.slider("Trail SL — ATR multiplier", min_value=1.0, max_value=5.0, value=2.0, step=0.5)
+                atr_tp_mult    = 999.0   # effectively no fixed TP
+                st.caption(f"Initial SL = {atr_sl_mult}×ATR · Trail SL = {atr_trail_mult}×ATR below peak")
+            else:
+                atr_tp_mult    = st.slider("TP — ATR multiplier", min_value=1.0, max_value=6.0, value=2.5, step=0.5)
+                atr_trail_mult = 2.0
+                st.caption(f"R:R = 1 : {atr_tp_mult/atr_sl_mult:.1f}  ·  SL/TP = {atr_sl_mult}× / {atr_tp_mult}× ATR")
+            stop_pct   = 0.02
+            target_pct = 0.05
+        else:
+            stop_pct      = st.slider("Stop Loss %",   min_value=0.5, max_value=6.0,  value=p["stop"],   step=0.1) / 100
+            target_pct    = st.slider("Take Profit %", min_value=1.0, max_value=15.0, value=p["target"], step=0.5) / 100
+            st.caption(f"R:R = 1 : {target_pct/stop_pct:.1f}")
+            atr_sl_mult   = 1.5
+            atr_tp_mult   = 2.5
+            atr_trail_mult = 2.0
+            use_trailing  = False
+        vol_mult = st.slider("Volume Filter (x avg)", min_value=1.0, max_value=2.0, value=p["vol"], step=0.1)
 
     with st.expander("Entry / Exit Rules"):
-        st.markdown("**Entry**\n- LONG: EMA9 > EMA21, RSI > 50, Vol spike\n- SHORT: EMA9 < EMA21, RSI < 50, Vol spike")
-        st.markdown(f"**Exit**\n- Stop Loss: **{stop_pct*100:.1f}%**\n- Take Profit: **{target_pct*100:.1f}%** (R:R 1:{target_pct/stop_pct:.1f})\n- Force exit on EMA reversal")
+        st.markdown("**Entry (all timeframes)**\n"
+                    "- EMA9 × EMA21 crossover (recent, within window)\n"
+                    "- ADX > 25 (trending market only)\n"
+                    "- Bullish/bearish candle (close > open for LONG)\n"
+                    "- Price within 2% of EMA21 (pullback confirmed)\n"
+                    "- RSI in range + Volume spike")
+        if use_atr:
+            st.markdown(f"**Exit**\n"
+                        f"- Stop Loss: **{atr_sl_mult}× ATR** below entry\n"
+                        f"- Take Profit: **{atr_tp_mult}× ATR** above entry\n"
+                        f"- Intrabar SL/TP via candle high/low\n"
+                        f"- Force exit on EMA reversal")
+        else:
+            st.markdown(f"**Exit**\n"
+                        f"- Stop Loss: **{stop_pct*100:.1f}%**\n"
+                        f"- Take Profit: **{target_pct*100:.1f}%** (R:R 1:{target_pct/stop_pct:.1f})\n"
+                        f"- Intrabar SL/TP via candle high/low\n"
+                        f"- Force exit on EMA reversal")
 
     st.caption("🔔 Hourly BUY alert runs automatically. Results appear top-right.")
 
@@ -478,6 +516,16 @@ def calc_adx(df, period=14):
     return dx.ewm(span=period, adjust=False).mean()
 
 
+def calc_atr(df, period=14):
+    high, low, close = df["high"], df["low"], df["close"]
+    tr = pd.concat([
+        high - low,
+        (high - close.shift(1)).abs(),
+        (low  - close.shift(1)).abs(),
+    ], axis=1).max(axis=1)
+    return tr.ewm(span=period, adjust=False).mean()
+
+
 # ── Data + signals ────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=300)
@@ -510,6 +558,7 @@ def fetch_and_process(ticker, interval, period, vol_mult):
         df["ema50"]   = calc_ema(df["close"], 50)
         df["rsi"]     = calc_rsi(df["close"], 14)
         df["adx"]     = calc_adx(df, 14)
+        df["atr"]     = calc_atr(df, 14)
         df["avg_vol"] = df["volume"].rolling(20).mean()
         df["bb_mid"], df["bb_upper"], df["bb_lower"] = calc_bollinger(df["close"])
         df["vwap"]    = calc_vwap(df)
@@ -527,6 +576,38 @@ def fetch_and_process(ticker, interval, period, vol_mult):
         rsi_rising  = df["rsi"] > df["rsi"].shift(1)
         rsi_falling = df["rsi"] < df["rsi"].shift(1)
 
+        # ── Price-Volume Action helpers ───────────────────────────────────────
+        rng = (df["high"] - df["low"]).replace(0, np.nan)
+
+        # Candle quality: close in upper 50% of range + meaningful body (not doji)
+        cq_bull = (
+            ((df["close"] - df["low"]) / rng > 0.50) &
+            ((df["close"] - df["open"]).abs() / rng > 0.25)
+        )
+        cq_bear = (
+            ((df["high"] - df["close"]) / rng > 0.50) &
+            ((df["close"] - df["open"]).abs() / rng > 0.25)
+        )
+
+        # Relative volume
+        rvol = df["volume"] / df["avg_vol"].replace(0, np.nan)
+
+        # Volume dry-up: recent bars traded quietly (healthy pullback / base)
+        vol3_avg = (df["volume"].shift(1) + df["volume"].shift(2) + df["volume"].shift(3)) / 3
+        vol_dry_pullback = vol3_avg < df["avg_vol"] * 0.90
+
+        # Volume expanding on signal bar vs. previous bar
+        vol_expand = df["volume"] > df["volume"].shift(1) * 1.05
+
+        # Tight base: 5-bar price range < 35% of 20-bar range (consolidation squeeze)
+        range5  = df["high"].rolling(5).max()  - df["low"].rolling(5).min()
+        range20 = df["high"].rolling(20).max() - df["low"].rolling(20).min()
+        tight_base = range5 < range20 * 0.38
+
+        # Breakout: close above highest high of last 10 bars (avoid look-ahead)
+        hi10 = df["high"].rolling(10).max().shift(1)
+        breakout_close = df["close"] > hi10
+
         def _bull_w(n):
             w = bull.copy()
             for i in range(1, n): w = w | bull.shift(i).fillna(False)
@@ -536,66 +617,229 @@ def fetch_and_process(ticker, interval, period, vol_mult):
             for i in range(1, n): w = w | bear.shift(i).fillna(False)
             return w & (df["ema9"] < df["ema21"])
 
+        trend_up = (df["ema9"] > df["ema21"]) & (df["ema21"] > df["ema50"])
+        trend_dn = (df["ema9"] < df["ema21"]) & (df["ema21"] < df["ema50"])
+        strong_up = trend_up & (df["adx"] > 25)
+        strong_dn = trend_dn & (df["adx"] > 25)
+
+        # ── Signal 1: EMA21 pullback bounce ──────────────────────────────────
+        pb_buy  = (trend_up
+                   & (df["low"]  <= df["ema21"] * 1.01)
+                   & (df["close"] > df["ema21"])
+                   & cq_bull & df["rsi"].between(35, 70) & rsi_rising
+                   & (rvol > 0.8))
+        pb_sell = (trend_dn
+                   & (df["high"] >= df["ema21"] * 0.99)
+                   & (df["close"] < df["ema21"])
+                   & cq_bear & df["rsi"].between(30, 65) & rsi_falling
+                   & (rvol > 0.8))
+
+        # ── Signal 2: EMA9 pullback bounce (strong/fast trends) ──────────────
+        pb9_buy  = (strong_up
+                    & (df["low"]  <= df["ema9"] * 1.005)
+                    & (df["close"] > df["ema9"])
+                    & cq_bull & df["rsi"].between(40, 72) & rsi_rising
+                    & (rvol > 0.8))
+        pb9_sell = (strong_dn
+                    & (df["high"] >= df["ema9"] * 0.995)
+                    & (df["close"] < df["ema9"])
+                    & cq_bear & df["rsi"].between(28, 60) & rsi_falling
+                    & (rvol > 0.8))
+
+        # ── Signal 3: Breakout from tight base on volume surge ────────────────
+        # Stock consolidates (price coils, ATR contracts), then breaks out on 1.5x+ volume.
+        # Doesn't need an EMA cross — the volume surge IS the signal.
+        breakout_buy = (
+            (df["ema21"] > df["ema50"]) &       # macro trend intact
+            tight_base.shift(1) &               # was consolidating last bar
+            breakout_close &                    # closes above 10-bar high
+            (rvol > 1.5) &                      # strong volume expansion
+            cq_bull &                           # quality close near high
+            df["rsi"].between(45, 80) & rsi_rising &
+            (df["adx"] > 15)                    # some trend/momentum
+        )
+        breakout_sell = (
+            (df["ema21"] < df["ema50"]) &
+            tight_base.shift(1) &
+            (df["close"] < df["low"].rolling(10).min().shift(1)) &
+            (rvol > 1.5) &
+            cq_bear &
+            df["rsi"].between(20, 55) & rsi_falling &
+            (df["adx"] > 15)
+        )
+
+        # ── Signal 4: Volume dry-up pullback + bounce ─────────────────────────
+        # In uptrend, pullback happened on quiet/declining volume (no distribution),
+        # now bouncing with volume returning. EMA touch NOT required — volume pattern
+        # is the signal. This catches entries before price even touches EMA21.
+        vdup_buy = (
+            trend_up &
+            vol_dry_pullback &                  # last 3 bars were quiet
+            vol_expand &                        # today volume picking up
+            (df["close"] > df["ema9"]) &        # bouncing above ema9
+            (df["close"] > df["open"]) &
+            cq_bull &
+            df["rsi"].between(40, 72) & rsi_rising
+        )
+        vdup_sell = (
+            trend_dn &
+            vol_dry_pullback &
+            vol_expand &
+            (df["close"] < df["ema9"]) &
+            (df["close"] < df["open"]) &
+            cq_bear &
+            df["rsi"].between(28, 60) & rsi_falling
+        )
+
+        # ── Signal 5: Climax exhaustion (sell only) ───────────────────────────
+        # After extended run above EMA21, a high-volume reversal bar signals
+        # institutional distribution — good time to exit or tighten stops.
+        extended = df["close"] > df["ema21"] * 1.12
+        climax_sell = (
+            trend_up &
+            extended &
+            (df["high"] > df["high"].shift(1)) &   # made new high intraday
+            (df["close"] < df["open"]) &           # but closed lower (reversal)
+            (rvol > 2.0) &                         # very high volume = distribution
+            (df["rsi"] > 72)
+        )
+
+        # ── Signal 6: EMA9/EMA21 crossover — early trend reversal ────────────
+        # Fires on the FIRST bar EMA9 crosses above EMA21 (or below for sell).
+        # Catches reversals before full EMA alignment — the signal missing when
+        # a stock/index bottoms and starts a new uptrend.
+        xo_buy = (
+            (df["ema9"] > df["ema21"]) &
+            (df["ema9"].shift(1) <= df["ema21"].shift(1)) &   # just crossed up
+            cq_bull &
+            (rvol > 1.0) &
+            df["rsi"].between(40, 78) & rsi_rising &
+            (df["adx"] > 12)
+        )
+        xo_sell = (
+            (df["ema9"] < df["ema21"]) &
+            (df["ema9"].shift(1) >= df["ema21"].shift(1)) &   # just crossed down
+            cq_bear &
+            (rvol > 1.0) &
+            df["rsi"].between(22, 60) & rsi_falling &
+            (df["adx"] > 12) &
+            (df["ema21"] < df["ema50"])                       # confirm bearish context
+        )
+
         if interval == "1mo":
             cross_buy, cross_sell = _bull_w(3), _bear_w(3)
-            buy_ok  = cross_buy  & df["rsi"].between(35, 70) & rsi_rising  & (df["close"] > df["ema50"])
-            sell_ok = cross_sell & df["rsi"].between(30, 65) & rsi_falling & (df["close"] < df["ema50"])
+            adx_ok = df["adx"] > 20
+            buy_ok  = (cross_buy  & cq_bull & df["rsi"].between(35, 70) & rsi_rising  & (df["close"] > df["ema50"]) & adx_ok) | pb_buy | pb9_buy | breakout_buy | vdup_buy | xo_buy
+            sell_ok = (cross_sell & cq_bear & df["rsi"].between(30, 65) & rsi_falling & (df["close"] < df["ema50"]) & (df["ema21"] < df["ema50"]) & adx_ok) | pb_sell | pb9_sell | breakout_sell | climax_sell | xo_sell
         elif interval == "1wk":
             cross_buy, cross_sell = _bull_w(4), _bear_w(4)
-            wvol = df["volume"] >= df["avg_vol"] * 1.1
-            buy_ok  = cross_buy  & df["rsi"].between(40, 72) & rsi_rising  & wvol & (df["close"] > df["ema50"])
-            sell_ok = cross_sell & df["rsi"].between(28, 58) & rsi_falling & wvol & (df["close"] < df["ema50"])
+            adx_ok = df["adx"] > 20
+            buy_ok  = (cross_buy  & cq_bull & df["rsi"].between(40, 72) & rsi_rising  & (rvol > 1.0) & (df["close"] > df["ema50"]) & adx_ok) | pb_buy | pb9_buy | breakout_buy | vdup_buy | xo_buy
+            sell_ok = (cross_sell & cq_bear & df["rsi"].between(28, 58) & rsi_falling & (rvol > 1.0) & (df["close"] < df["ema50"]) & (df["ema21"] < df["ema50"]) & adx_ok) | pb_sell | pb9_sell | breakout_sell | climax_sell | xo_sell
         elif interval == "1d":
             cross_buy, cross_sell = _bull_w(5), _bear_w(5)
-            buy_ok  = cross_buy  & df["rsi"].between(45, 75) & rsi_rising  & vol_ok & (df["close"] > df["ema50"])
-            sell_ok = cross_sell & df["rsi"].between(25, 55) & rsi_falling & vol_ok & (df["close"] < df["ema50"])
+            adx_ok = df["adx"] > 20
+            buy_ok  = (cross_buy  & cq_bull & df["rsi"].between(45, 75) & rsi_rising  & vol_ok & (df["close"] > df["ema50"]) & adx_ok) | pb_buy | pb9_buy | breakout_buy | vdup_buy | xo_buy
+            sell_ok = (cross_sell & cq_bear & df["rsi"].between(25, 55) & rsi_falling & vol_ok & (df["close"] < df["ema50"]) & (df["ema21"] < df["ema50"]) & adx_ok) | pb_sell | pb9_sell | breakout_sell | climax_sell | xo_sell
         else:
-            buy_ok  = bull & df["rsi"].between(45, 75) & vol_ok & (df["close"] > df["ema50"]) & vwap_buy  & (df["adx"] > 20)
-            sell_ok = bear & df["rsi"].between(25, 55) & vol_ok & (df["close"] < df["ema50"]) & vwap_sell & (df["adx"] > 20)
+            adx_ok = df["adx"] > 25
+            buy_ok  = (bull & cq_bull & df["rsi"].between(45, 75) & vol_ok & (df["close"] > df["ema50"]) & vwap_buy  & adx_ok) | pb9_buy | vdup_buy | xo_buy
+            sell_ok = (bear & cq_bear & df["rsi"].between(25, 55) & vol_ok & (df["close"] < df["ema50"]) & (df["ema21"] < df["ema50"]) & vwap_sell & adx_ok) | pb9_sell | climax_sell | xo_sell
 
         df["signal"] = 0
+        df["sig_type"] = ""
         df.loc[buy_ok,  "signal"] =  1
         df.loc[sell_ok, "signal"] = -1
+        # Label signal types (priority: most specific first)
+        df.loc[xo_buy,        "sig_type"] = "XO"     # EMA crossover reversal
+        df.loc[xo_sell,       "sig_type"] = "XO"
+        df.loc[breakout_buy,  "sig_type"] = "BO"     # Breakout
+        df.loc[vdup_buy,      "sig_type"] = "VD"     # Vol dry-up pullback
+        df.loc[pb9_buy,       "sig_type"] = "PB9"    # EMA9 pullback
+        df.loc[pb_buy,        "sig_type"] = "PB21"   # EMA21 pullback
+        df.loc[breakout_sell, "sig_type"] = "BO"
+        df.loc[climax_sell,   "sig_type"] = "CLX"    # Climax/exhaustion
+        df.loc[pb9_sell,      "sig_type"] = "PB9"
+        df.loc[pb_sell,       "sig_type"] = "PB21"
         return df
 
     except Exception:
         return None
 
 
-def run_backtest(df, stop_pct, target_pct):
+def run_backtest(df, stop_pct, target_pct, use_atr=True, atr_sl_mult=1.5, atr_tp_mult=2.5,
+                 use_trailing=True, atr_trail_mult=2.0):
     trades   = []
     position = None
 
     for ts, row in df.iterrows():
         if position is not None:
             side  = position["side"]
-            entry = position["entry"]
-            sl    = entry * (1 - side * stop_pct)
-            tp    = entry * (1 + side * target_pct)
-            price = float(row["close"])
+            hi    = float(row["high"])
+            lo    = float(row["low"])
+            close = float(row["close"])
+            atr   = float(row["atr"]) if "atr" in row and not np.isnan(float(row["atr"])) else None
 
-            hit_sl   = (side ==  1 and price <= sl) or (side == -1 and price >= sl)
-            hit_tp   = (side ==  1 and price >= tp) or (side == -1 and price <= tp)
-            reversal = (side ==  1 and row["ema9"] < row["ema21"]) or \
-                       (side == -1 and row["ema9"] > row["ema21"])
+            # Update trailing stop: ratchet SL up (long) or down (short) as price moves
+            if use_trailing and atr is not None:
+                new_peak = max(position["peak"], hi) if side == 1 else min(position["peak"], lo)
+                position["peak"] = new_peak
+                trail_sl = new_peak - side * atr_trail_mult * atr
+                # Only move SL in the profitable direction
+                if side == 1 and trail_sl > position["sl"]:
+                    position["sl"] = trail_sl
+                elif side == -1 and trail_sl < position["sl"]:
+                    position["sl"] = trail_sl
 
-            if hit_tp or hit_sl or reversal:
-                exit_p = tp if hit_tp else (sl if hit_sl else price)
-                pnl    = side * (exit_p - entry) / entry * 100
-                reason = "TP" if hit_tp else ("SL" if hit_sl else "REVERSAL")
+            sl = position["sl"]
+            tp = position["tp"]
+
+            # Intrabar check via candle high/low
+            hit_sl = (side ==  1 and lo  <= sl) or (side == -1 and hi  >= sl)
+            hit_tp = (side ==  1 and hi  >= tp) or (side == -1 and lo  <= tp)
+            if hit_sl and hit_tp:
+                hit_tp = False   # SL wins if both triggered same candle
+
+            if hit_tp or hit_sl:
+                exit_p = tp if hit_tp else sl
+                pnl    = side * (exit_p - position["entry"]) / position["entry"] * 100
+                is_trail = hit_sl and use_trailing and (
+                    (side == 1 and position["sl"] > position["initial_sl"]) or
+                    (side == -1 and position["sl"] < position["initial_sl"])
+                )
+                reason = "TP" if hit_tp else ("Trail SL" if is_trail else "SL")
+                # Store initial_sl for chart display; mark tp as NaN when trailing (no fixed TP)
+                display_tp = np.nan if use_trailing else round(tp, 4)
                 trades.append({
                     "entry_time": position["entry_time"],
                     "exit_time" : ts,
                     "side"      : "LONG" if side == 1 else "SHORT",
-                    "entry"     : round(entry, 4),
+                    "entry"     : round(position["entry"], 4),
                     "exit"      : round(exit_p, 4),
                     "pnl_%"     : round(pnl, 3),
                     "reason"    : reason,
+                    "sl"        : round(position["initial_sl"], 4),  # initial SL for chart box
+                    "tp"        : display_tp,
                 })
                 position = None
 
         if position is None and row["signal"] != 0:
-            position = {"side": int(row["signal"]), "entry": float(row["close"]), "entry_time": ts}
+            entry = float(row["close"])
+            side  = int(row["signal"])
+            atr   = float(row["atr"]) if "atr" in row and not np.isnan(float(row["atr"])) else np.nan
+
+            if use_atr and not np.isnan(atr):
+                sl = entry - side * atr_sl_mult * atr
+                tp = entry + side * atr_tp_mult * atr
+            else:
+                sl = entry * (1 - side * stop_pct)
+                tp = entry * (1 + side * target_pct)
+
+            position = {
+                "side": side, "entry": entry, "entry_time": ts,
+                "sl": sl, "tp": tp, "initial_sl": sl,
+                "peak": entry,   # tracks highest high (long) or lowest low (short)
+            }
 
     return pd.DataFrame(trades) if trades else pd.DataFrame()
 
@@ -603,31 +847,39 @@ def run_backtest(df, stop_pct, target_pct):
 # ── Chart builder ─────────────────────────────────────────────────────────────
 
 def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
-    # For intraday: use string labels as x-axis to eliminate all gaps (overnight, weekends)
+    # For intraday: use string labels as x-axis to eliminate all gaps
     if interval == "1mo":
         x_vals = df.index
-        fmt = "%b %Y"
     elif interval in ("1d", "1wk"):
         x_vals = df.index
-        fmt = "%b %d"
-    elif interval in ("1h",):
-        x_vals = df.index.strftime("%b %d  %H:%M")
-        fmt = None
     else:
         x_vals = df.index.strftime("%b %d  %H:%M")
-        fmt = None
+
+    has_trades = not trades_df.empty
 
     fig = make_subplots(
-        rows=3, cols=1,
+        rows=4, cols=1,
         shared_xaxes=True,
-        row_heights=[0.60, 0.22, 0.18],
+        row_heights=[0.50, 0.18, 0.13, 0.19],
         vertical_spacing=0.02,
         subplot_titles=(
             f"{ticker}  ·  {interval}  —  Price · EMA · Bollinger" + ("" if interval in ("1d","1wk","1mo") else " · VWAP"),
             "RSI (14)",
             "Volume",
+            "Equity Curve  (Cumulative P&L %)",
         ),
     )
+
+    # ── Timestamp → x-label mapper ────────────────────────────────────────────
+    if interval not in ("1d", "1wk", "1mo"):
+        ts_to_x = {ts: lbl for ts, lbl in zip(df.index, x_vals)}
+        def _tx(ts):
+            if ts in ts_to_x:
+                return ts_to_x[ts]
+            nearest = min(df.index, key=lambda t: abs(t - ts))
+            return ts_to_x[nearest]
+    else:
+        def _tx(ts): return ts
 
     # ── 1. Bollinger Band fill ─────────────────────────────────────────────────
     fig.add_trace(go.Scatter(
@@ -642,7 +894,34 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
         showlegend=True, hoverinfo="skip",
     ), row=1, col=1)
 
-    # ── 2. Candlesticks ────────────────────────────────────────────────────────
+    # ── 2. R:R boxes (drawn before candles so they sit behind) ────────────────
+    if has_trades:
+        for _, t in trades_df.iterrows():
+            is_long  = t["side"] == "LONG"
+            ep       = t["entry"]
+            sl_p     = float(t["sl"]) if "sl" in t and not np.isnan(float(t["sl"])) else ep * (1 - (1 if is_long else -1) * stop_pct)
+            raw_tp   = t.get("tp", np.nan)
+            tp_p     = float(raw_tp) if not (raw_tp != raw_tp or raw_tp is None) else None  # NaN check
+            ex, xx   = _tx(t["entry_time"]), _tx(t["exit_time"])
+
+            # SL zone — red fill between entry and initial SL
+            y0, y1 = min(ep, sl_p), max(ep, sl_p)
+            fig.add_trace(go.Scatter(
+                x=[ex, xx, xx, ex, ex], y=[y0, y0, y1, y1, y0],
+                fill="toself", fillcolor="rgba(239,83,80,0.12)",
+                line=dict(width=0), showlegend=False, hoverinfo="skip",
+            ), row=1, col=1)
+
+            # TP zone — only draw when a fixed TP exists (not trailing mode)
+            if tp_p is not None:
+                y0, y1 = min(ep, tp_p), max(ep, tp_p)
+                fig.add_trace(go.Scatter(
+                    x=[ex, xx, xx, ex, ex], y=[y0, y0, y1, y1, y0],
+                    fill="toself", fillcolor="rgba(34,197,94,0.09)",
+                    line=dict(width=0), showlegend=False, hoverinfo="skip",
+                ), row=1, col=1)
+
+    # ── 3. Candlesticks ────────────────────────────────────────────────────────
     fig.add_trace(go.Candlestick(
         x=x_vals,
         open=df["open"], high=df["high"],
@@ -658,7 +937,7 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
         hoverinfo="text+x",
     ), row=1, col=1)
 
-    # ── 3. EMA lines ───────────────────────────────────────────────────────────
+    # ── 4. EMA lines ───────────────────────────────────────────────────────────
     fig.add_trace(go.Scatter(
         x=x_vals, y=df["ema9"], name="EMA 9",
         line=dict(color="#f59e0b", width=1.8),
@@ -675,7 +954,7 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
         hovertemplate="EMA50: %{y:.2f}<extra></extra>",
     ), row=1, col=1)
 
-    # ── 4. VWAP (intraday only) ────────────────────────────────────────────────
+    # ── 5. VWAP (intraday only) ────────────────────────────────────────────────
     if interval not in ("1d", "1wk", "1mo"):
         fig.add_trace(go.Scatter(
             x=x_vals, y=df["vwap"], name="VWAP",
@@ -683,87 +962,134 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
             hovertemplate="VWAP: %{y:.2f}<extra></extra>",
         ), row=1, col=1)
 
-    # ── 5. Trade lines + markers ───────────────────────────────────────────────
-    # Map trade timestamps to x_vals string labels (for intraday categorical axis)
-    if interval not in ("1d","1wk","1mo"):
-        ts_to_x = {ts: lbl for ts, lbl in zip(df.index, x_vals)}
-        def _tx(ts):
-            # find nearest index label
-            if ts in ts_to_x:
-                return ts_to_x[ts]
-            nearest = min(df.index, key=lambda t: abs(t - ts))
-            return ts_to_x[nearest]
-    else:
-        def _tx(ts): return ts
-
-    if not trades_df.empty:
+    # ── 6. Trade overlays ─────────────────────────────────────────────────────
+    if has_trades:
+        # 6a. Trade path lines + SL/TP level lines (colored by win/loss)
         for _, t in trades_df.iterrows():
             is_win  = t["pnl_%"] > 0
-            color   = "#22c55e" if is_win else "#f87171"
             is_long = t["side"] == "LONG"
+            clr     = "#22c55e" if is_win else "#ef5350"
+            ep      = t["entry"]
+            sl_p    = float(t["sl"]) if "sl" in t and not np.isnan(float(t["sl"])) else ep * (1 - (1 if is_long else -1) * stop_pct)
+            raw_tp  = t.get("tp", np.nan)
+            tp_p    = float(raw_tp) if not (raw_tp != raw_tp or raw_tp is None) else None
+            ex, xx  = _tx(t["entry_time"]), _tx(t["exit_time"])
 
             fig.add_trace(go.Scatter(
-                x=[_tx(t["entry_time"]), _tx(t["exit_time"])],
-                y=[t["entry"], t["exit"]],
-                mode="lines",
-                line=dict(color=color, width=1.5, dash="dot"),
-                showlegend=False, hoverinfo="skip",
-            ), row=1, col=1)
-
-            sl_price = t["entry"] * (1 - (1 if is_long else -1) * stop_pct)
-            tp_price = t["entry"] * (1 + (1 if is_long else -1) * target_pct)
-            fig.add_trace(go.Scatter(
-                x=[_tx(t["entry_time"]), _tx(t["exit_time"])],
-                y=[sl_price, sl_price],
-                mode="lines", line=dict(color="#ef5350", width=0.8, dash="dash"),
+                x=[ex, xx], y=[t["entry"], t["exit"]],
+                mode="lines", line=dict(color=clr, width=2, dash="dot"),
                 showlegend=False, hoverinfo="skip",
             ), row=1, col=1)
             fig.add_trace(go.Scatter(
-                x=[_tx(t["entry_time"]), _tx(t["exit_time"])],
-                y=[tp_price, tp_price],
-                mode="lines", line=dict(color="#22c55e", width=0.8, dash="dash"),
+                x=[ex, xx], y=[sl_p, sl_p],
+                mode="lines", line=dict(color="#ef5350", width=1, dash="dash"),
                 showlegend=False, hoverinfo="skip",
             ), row=1, col=1)
+            if tp_p is not None:
+                fig.add_trace(go.Scatter(
+                    x=[ex, xx], y=[tp_p, tp_p],
+                    mode="lines", line=dict(color="#22c55e", width=1, dash="dash"),
+                    showlegend=False, hoverinfo="skip",
+                ), row=1, col=1)
 
+        # 6b. Entry markers (larger, bolder)
         longs  = trades_df[trades_df["side"] == "LONG"]
         shorts = trades_df[trades_df["side"] == "SHORT"]
         if not longs.empty:
             fig.add_trace(go.Scatter(
                 x=[_tx(t) for t in longs["entry_time"]], y=longs["entry"],
                 mode="markers", name="Buy Entry",
-                marker=dict(symbol="triangle-up", size=14, color="#26a69a",
-                            line=dict(color="white", width=1)),
+                marker=dict(symbol="triangle-up", size=16, color="#26a69a",
+                            line=dict(color="white", width=1.5)),
                 hovertemplate="BUY @ ₹%{y:.2f}<br>%{x}<extra></extra>",
             ), row=1, col=1)
         if not shorts.empty:
             fig.add_trace(go.Scatter(
                 x=[_tx(t) for t in shorts["entry_time"]], y=shorts["entry"],
                 mode="markers", name="Sell Entry",
-                marker=dict(symbol="triangle-down", size=14, color="#ef5350",
-                            line=dict(color="white", width=1)),
+                marker=dict(symbol="triangle-down", size=16, color="#ef5350",
+                            line=dict(color="white", width=1.5)),
                 hovertemplate="SELL @ ₹%{y:.2f}<br>%{x}<extra></extra>",
             ), row=1, col=1)
 
-        for _, t in trades_df.iterrows():
+        # 6c. Exit markers + P&L labels (alternating top/bottom to avoid overlap)
+        sorted_t = trades_df.sort_values("exit_time").reset_index(drop=True)
+        last_x, flip = None, False
+        for _, t in sorted_t.iterrows():
             is_win = t["pnl_%"] > 0
-            color  = "#22c55e" if is_win else "#f87171"
-            symbol = "circle" if is_win else "x"
+            clr    = "#22c55e" if is_win else "#ef5350"
+            sym    = "circle" if is_win else "x"
+            ex     = _tx(t["exit_time"])
+            flip   = (not flip) if ex == last_x else False
+            last_x = ex
             label  = f"{t['pnl_%']:+.1f}%"
             fig.add_trace(go.Scatter(
-                x=[_tx(t["exit_time"])], y=[t["exit"]],
+                x=[ex], y=[t["exit"]],
                 mode="markers+text",
-                marker=dict(symbol=symbol, size=10, color=color,
-                            line=dict(color="white", width=1)),
+                marker=dict(symbol=sym, size=12, color=clr,
+                            line=dict(color="white", width=1.5)),
                 text=[label],
-                textposition="top center",
-                textfont=dict(size=9, color=color),
+                textposition="bottom center" if flip else "top center",
+                textfont=dict(size=9, color=clr),
                 showlegend=False,
-                hovertemplate=f"{t['side']}  Exit @ ₹{t['exit']:.2f}<br>"
-                              f"P&L: {label}  [{t['reason']}]<extra></extra>",
+                hovertemplate=(f"{t['side']}  Exit @ ₹{t['exit']:.2f}<br>"
+                               f"P&L: {label}  [{t['reason']}]<extra></extra>"),
             ), row=1, col=1)
 
-    # ── 6. RSI with fill ───────────────────────────────────────────────────────
-    rsi_color = df["rsi"].apply(lambda v: "#22c55e" if v > 50 else "#ef5350")
+        # 6d. Win/Loss summary box (top-right of chart)
+        wins     = int((trades_df["pnl_%"] > 0).sum())
+        losses   = int((trades_df["pnl_%"] <= 0).sum())
+        wr       = wins / len(trades_df) * 100
+        net      = trades_df["pnl_%"].sum()
+        net_clr  = "#22c55e" if net >= 0 else "#ef5350"
+        fig.add_annotation(
+            text=f"W {wins}  L {losses}  |  WR {wr:.0f}%  |  Net <b>{net:+.1f}%</b>",
+            xref="paper", yref="paper",
+            x=0.99, y=0.99, xanchor="right", yanchor="top",
+            showarrow=False,
+            bgcolor="#1e293b", bordercolor="#334155", borderwidth=1,
+            font=dict(size=11, color=net_clr),
+        )
+
+    # ── 6e. Raw signal markers from df (all signals, labeled by type) ─────────
+    if "signal" in df.columns and "sig_type" in df.columns:
+        sig_col = "sig_type" if "sig_type" in df.columns else None
+        buy_rows  = df[df["signal"] ==  1]
+        sell_rows = df[df["signal"] == -1]
+        if not buy_rows.empty:
+            bx = [_tx(t) for t in buy_rows.index]
+            by = buy_rows["low"] * 0.993
+            bt = buy_rows["sig_type"].tolist() if sig_col else ["B"] * len(buy_rows)
+            fig.add_trace(go.Scatter(
+                x=bx, y=list(by),
+                mode="markers+text",
+                marker=dict(symbol="triangle-up", size=11, color="rgba(38,166,154,0.85)",
+                            line=dict(color="#1a8f87", width=1)),
+                text=bt,
+                textposition="bottom center",
+                textfont=dict(size=8, color="#26a69a"),
+                name="Buy Signal", showlegend=True,
+                hovertemplate="BUY [%{text}] @ ₹%{customdata:.2f}<extra></extra>",
+                customdata=list(buy_rows["close"]),
+            ), row=1, col=1)
+        if not sell_rows.empty:
+            sx = [_tx(t) for t in sell_rows.index]
+            sy = sell_rows["high"] * 1.007
+            st = sell_rows["sig_type"].tolist() if sig_col else ["S"] * len(sell_rows)
+            fig.add_trace(go.Scatter(
+                x=sx, y=list(sy),
+                mode="markers+text",
+                marker=dict(symbol="triangle-down", size=11, color="rgba(239,83,80,0.85)",
+                            line=dict(color="#c62828", width=1)),
+                text=st,
+                textposition="top center",
+                textfont=dict(size=8, color="#ef5350"),
+                name="Sell Signal", showlegend=True,
+                hovertemplate="SELL [%{text}] @ ₹%{customdata:.2f}<extra></extra>",
+                customdata=list(sell_rows["close"]),
+            ), row=1, col=1)
+
+    # ── 7. RSI with fill ───────────────────────────────────────────────────────
     fig.add_trace(go.Scatter(
         x=x_vals, y=[50] * len(df),
         line=dict(color="rgba(0,0,0,0)", width=0),
@@ -772,8 +1098,7 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
     fig.add_trace(go.Scatter(
         x=x_vals, y=df["rsi"], name="RSI",
         line=dict(color="#a78bfa", width=1.8),
-        fill="tonexty",
-        fillcolor="rgba(167,139,250,0.12)",
+        fill="tonexty", fillcolor="rgba(167,139,250,0.12)",
         hovertemplate="RSI: %{y:.1f}<extra></extra>",
         showlegend=False,
     ), row=2, col=1)
@@ -783,7 +1108,7 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
                            xanchor="left", font=dict(size=9, color=color),
                            showarrow=False, row=2, col=1)
 
-    # ── 7. Volume bars ─────────────────────────────────────────────────────────
+    # ── 8. Volume bars ─────────────────────────────────────────────────────────
     vol_colors = ["#26a69a" if c >= o else "#ef5350"
                   for c, o in zip(df["close"], df["open"])]
     fig.add_trace(go.Bar(
@@ -799,9 +1124,31 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
         hovertemplate="Avg Vol: %{y:,.0f}<extra></extra>",
     ), row=3, col=1)
 
+    # ── 9. Equity curve ────────────────────────────────────────────────────────
+    if has_trades:
+        eq        = trades_df.sort_values("exit_time").copy()
+        eq["cum"] = eq["pnl_%"].cumsum()
+        eq_x      = [_tx(ts) for ts in eq["exit_time"]]
+        eq_y      = eq["cum"].tolist()
+        origin_x  = _tx(eq.iloc[0]["entry_time"])
+        final     = eq["cum"].iloc[-1]
+        ec        = "#22c55e" if final >= 0 else "#ef5350"
+        ec_fill   = "rgba(34,197,94,0.12)" if final >= 0 else "rgba(239,83,80,0.12)"
+        pt_colors = ["#22c55e" if v >= 0 else "#ef5350" for v in [0.0] + eq_y]
+
+        fig.add_trace(go.Scatter(
+            x=[origin_x] + eq_x, y=[0.0] + eq_y,
+            mode="lines+markers", name="Equity",
+            line=dict(color=ec, width=2),
+            marker=dict(size=6, color=pt_colors, line=dict(color="white", width=1)),
+            fill="tozeroy", fillcolor=ec_fill,
+            hovertemplate="Cum P&L: %{y:+.2f}%<extra></extra>",
+        ), row=4, col=1)
+        fig.add_hline(y=0, line_dash="dot", line_color="#475569", line_width=1, row=4, col=1)
+
     # ── Layout ─────────────────────────────────────────────────────────────────
     fig.update_layout(
-        height=580,
+        height=660,
         paper_bgcolor="#0f172a",
         plot_bgcolor="#0f172a",
         font=dict(color="#e2e8f0", family="Inter, sans-serif", size=12),
@@ -815,7 +1162,7 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
         hoverlabel=dict(bgcolor="#1e293b", bordercolor="#334155",
                         font=dict(color="#e2e8f0", size=11)),
         margin=dict(l=10, r=60, t=60, b=10),
-        xaxis3=dict(
+        xaxis4=dict(
             rangeselector=dict(
                 buttons=[
                     dict(count=1,  label="1D",  step="day",   stepmode="backward"),
@@ -829,19 +1176,16 @@ def build_chart(df, trades_df, ticker, interval, stop_pct, target_pct):
             ),
         ),
     )
-    for i in range(1, 4):
+    for i in range(1, 5):
         fig.update_xaxes(gridcolor="#1e293b", zeroline=False, row=i, col=1)
-        fig.update_yaxes(gridcolor="#1e293b", zeroline=False, tickprefix="₹" if i == 1 else "",
-                         row=i, col=1)
-    fig.update_yaxes(tickprefix="", row=2, col=1)
-    fig.update_yaxes(tickprefix="", row=3, col=1)
+        fig.update_yaxes(gridcolor="#1e293b", zeroline=False,
+                         tickprefix="₹" if i == 1 else "", row=i, col=1)
+    fig.update_yaxes(tickprefix="", ticksuffix="", row=2, col=1)
+    fig.update_yaxes(tickprefix="", ticksuffix="", row=3, col=1)
+    fig.update_yaxes(tickprefix="", ticksuffix="%", row=4, col=1)
 
-    # Remove weekend gaps (like TradingView) — only for daily charts
-    # Intraday: skip rangebreaks as NSE timezone offsets cause rendering issues
     if interval == "1d":
-        fig.update_xaxes(
-            rangebreaks=[dict(bounds=["sat", "mon"])]
-        )
+        fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
     return fig
 
@@ -873,6 +1217,10 @@ def get_live_signal(df, interval="1h"):
     rsi_rising  = rsi_val > rsi_prev
     rsi_falling = rsi_val < rsi_prev
 
+    # XO (crossover) — fires even without full EMA alignment, catches reversals
+    xo_buy_ok  = bull_cross and (40 <= rsi_val <= 78) and rsi_rising  and vol_now >= avg_vol * 1.0 and adx_val > 12
+    xo_sell_ok = bear_cross and (22 <= rsi_val <= 60) and rsi_falling and vol_now >= avg_vol * 1.0 and adx_val > 12 and ema9_now < ema21_now and ema21_now < ema50_now
+
     def _window(n):
         if len(df) < n + 1:
             return bull_cross
@@ -894,8 +1242,8 @@ def get_live_signal(df, interval="1h"):
         vol_check   = True
         cross_label = "EMA crossover within last 3 months"
         cond_extra_label, cond_extra = "RSI rising (momentum)", rsi_rising
-        buy_confirmed  = cross_buy  and rsi_buy_ok  and rsi_rising  and trend_up
-        sell_confirmed = cross_sell and rsi_sell_ok and rsi_falling and trend_dn
+        buy_confirmed  = cross_buy  and rsi_buy_ok  and rsi_rising  and trend_up or xo_buy_ok
+        sell_confirmed = cross_sell and rsi_sell_ok and rsi_falling and trend_dn or xo_sell_ok
 
     elif interval == "1wk":
         rsi_buy_ok  = 40 <= rsi_val <= 72
@@ -904,8 +1252,8 @@ def get_live_signal(df, interval="1h"):
         vol_check   = vol_now >= avg_vol * 1.1
         cross_label = "EMA crossover within last 4 weeks"
         cond_extra_label, cond_extra = "RSI rising (momentum)", rsi_rising
-        buy_confirmed  = cross_buy  and rsi_buy_ok  and rsi_rising  and vol_check and trend_up
-        sell_confirmed = cross_sell and rsi_sell_ok and rsi_falling and vol_check and trend_dn
+        buy_confirmed  = cross_buy  and rsi_buy_ok  and rsi_rising  and vol_check and trend_up or xo_buy_ok
+        sell_confirmed = cross_sell and rsi_sell_ok and rsi_falling and vol_check and trend_dn or xo_sell_ok
 
     elif interval == "1d":
         rsi_buy_ok  = 45 <= rsi_val <= 75
@@ -914,8 +1262,8 @@ def get_live_signal(df, interval="1h"):
         vol_check   = vol_now >= avg_vol * 1.2
         cross_label = "EMA crossover within last 5 days"
         cond_extra_label, cond_extra = "RSI rising (momentum)", rsi_rising
-        buy_confirmed  = cross_buy  and rsi_buy_ok  and rsi_rising  and vol_check and trend_up
-        sell_confirmed = cross_sell and rsi_sell_ok and rsi_falling and vol_check and trend_dn
+        buy_confirmed  = cross_buy  and rsi_buy_ok  and rsi_rising  and vol_check and trend_up or xo_buy_ok
+        sell_confirmed = cross_sell and rsi_sell_ok and rsi_falling and vol_check and trend_dn or xo_sell_ok
 
     else:
         rsi_buy_ok  = 45 <= rsi_val <= 75
@@ -968,7 +1316,8 @@ if run or "df" not in st.session_state or ticker != st.session_state.get("ticker
         st.error(f"Could not fetch data for **{ticker}**. The ticker may be delisted, unavailable on yfinance, or misspelled. Try adding **.NS** (NSE) or **.BO** (BSE).")
         st.stop()
 
-    trades_df = run_backtest(df, stop_pct, target_pct)
+    trades_df = run_backtest(df, stop_pct, target_pct, use_atr, atr_sl_mult, atr_tp_mult,
+                             use_trailing, atr_trail_mult)
     st.session_state["df"]        = df
     st.session_state["trades_df"] = trades_df
     st.session_state["ticker"]    = ticker
@@ -1484,15 +1833,33 @@ elif page == "🔍  Stock Scanner":
                     continue
                 sig, price_, rsi_, ema9_, ema21_, vol_, avg_vol_, conds = get_live_signal(sdf, interval)
                 name = next((n for n, t in NSE_STOCKS.items() if t == tkr), tkr)
+
+                # Approx target: recent swing high (60 bars) or at least 8% above entry (BUY)
+                #                recent swing low  (60 bars) or at least 8% below entry (SELL)
+                try:
+                    highs = list(sdf["high"].dropna().astype(float))
+                    lows  = list(sdf["low"].dropna().astype(float))
+                    n60h  = highs[-min(60, len(highs)):]
+                    n60l  = lows[-min(60, len(lows)):]
+                    if "BUY" in sig:
+                        tgt    = round(max(max(n60h), price_ * 1.08), 2)
+                    else:
+                        tgt    = round(min(min(n60l), price_ * 0.92), 2)
+                    upside = round((tgt - price_) / price_ * 100, 1)
+                except Exception:
+                    tgt, upside = None, None
+
                 results.append({
-                    "Signal"   : sig,
-                    "Company"  : name,
-                    "Ticker"   : tkr,
-                    "Price ₹"  : round(price_, 2),
-                    "RSI"      : round(rsi_, 1),
-                    "EMA9"     : round(ema9_, 2),
-                    "EMA21"    : round(ema21_, 2),
-                    "Vol / Avg": f"{vol_/avg_vol_:.2f}x" if avg_vol_ else "—",
+                    "Signal"    : sig,
+                    "Company"   : name,
+                    "Ticker"    : tkr,
+                    "Price ₹"   : round(price_, 2),
+                    "Target ₹"  : tgt,
+                    "Upside %"  : upside,
+                    "RSI"       : round(rsi_, 1),
+                    "EMA9"      : round(ema9_, 2),
+                    "EMA21"     : round(ema21_, 2),
+                    "Vol / Avg" : f"{vol_/avg_vol_:.2f}x" if avg_vol_ else "—",
                 })
             except Exception:
                 continue
@@ -1541,16 +1908,26 @@ elif page == "🔍  Stock Scanner":
             "Company"  : f"https://www.tradingview.com/chart/?symbol=NSE:{r['Ticker'].replace('.NS','').replace('.BO','')}",
             "Ticker"   : r["Ticker"],
             "Price ₹"  : f"₹{r['Price ₹']:,.2f}",
+            "Target ₹" : f"₹{r['Target ₹']:,.2f}" if r.get("Target ₹") else "—",
+            "Upside %"  : r.get("Upside %"),
             "RSI"      : r["RSI"],
             "EMA9"     : f"{r['EMA9']:,.2f}",
             "EMA21"    : f"{r['EMA21']:,.2f}",
             "Vol/Avg"  : r["Vol / Avg"],
         } for r in rows])
 
+        def color_upside(val):
+            try:
+                v = float(val)
+                return "color:#16a34a;font-weight:600" if v > 0 else "color:#dc2626;font-weight:600"
+            except Exception:
+                return ""
+
         st.dataframe(
             df_display.style
                 .apply(lambda col: col.map(highlight_signal), axis=0, subset=["Signal"])
-                .apply(highlight_rsi_row, axis=1),
+                .apply(highlight_rsi_row, axis=1)
+                .map(color_upside, subset=["Upside %"]),
             use_container_width=True,
             height=min(500, 38 + len(rows) * 35),
             hide_index=True,
@@ -1559,7 +1936,12 @@ elif page == "🔍  Stock Scanner":
                     "Company",
                     display_text=r"symbol=NSE:([^&]+)",
                     help="Open on TradingView",
-                )
+                ),
+                "Upside %": st.column_config.NumberColumn(
+                    "Upside %",
+                    format="%.1f%%",
+                    help="(Target − Price) / Price. BUY: upside to swing high; SELL: downside to swing low.",
+                ),
             }
         )
 
@@ -1589,5 +1971,7 @@ elif page == "🔍  Stock Scanner":
             with st.expander(f"👀 {len(watches)} stocks almost ready — WATCH list (1 condition missing)"):
                 render_table(watches.to_dict("records"), key_prefix="watch")
 
+        _sl_str = f"{atr_sl_mult}×ATR" if use_atr else f"{stop_pct*100:.1f}%"
+        _tp_str = f"{atr_tp_mult}×ATR" if use_atr else f"{target_pct*100:.1f}%"
         st.caption(f"Scanned {len(rdf)} stocks · {interval} · {period} · "
-                   f"Vol ≥{vol_mult}x · SL {stop_pct*100:.1f}% · TP {target_pct*100:.1f}%")
+                   f"Vol ≥{vol_mult}x · SL {_sl_str} · TP {_tp_str}")

@@ -7,6 +7,43 @@ import sys, os, json, datetime
 import pandas as pd
 import requests, io
 
+def _nse_market_open():
+    """True if NSE regular session is running (9:15–15:30 IST, Mon–Fri)."""
+    try:
+        import pytz
+        from datetime import time as dtime
+        ist = pytz.timezone("Asia/Kolkata")
+        now = datetime.datetime.now(ist)
+        if now.weekday() >= 5:
+            return False
+        t = now.time()
+        return dtime(9, 15) <= t <= dtime(15, 30)
+    except Exception:
+        return False
+
+def _fetch_live_prices(tickers, batch_size=400):
+    """Download latest 5-min bar for each ticker; return {sym_ns: price}."""
+    import yfinance as yf
+    result = {}
+    try:
+        for i in range(0, len(tickers), batch_size):
+            batch = tickers[i:i+batch_size]
+            try:
+                data = yf.download(batch, period="1d", interval="5m",
+                                   auto_adjust=True, progress=False, prepost=False, threads=True)
+                if data.empty:
+                    continue
+                close_df = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data[["Close"]]
+                for col in close_df.columns:
+                    s = close_df[col].dropna()
+                    if not s.empty:
+                        result[str(col)] = float(s.iloc[-1])
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return result
+
 DIR = os.path.dirname(os.path.abspath(__file__))
 UNIVERSE_CACHE = os.path.join(DIR, "universe_cache.json")
 MCAP_CACHE     = os.path.join(DIR, "mcap_cache.json")
@@ -251,7 +288,8 @@ def _save_history(rows, top_n=15, keep_days=60, prefix="", sort_cols=None):
     _write_formatted_excel(HIST_PATH, all_sheets, streak_stocks=streak_stocks)
     _log(f"Saved {len(df_new)} rows to history.xlsx (sheet: {today}, prefix='{prefix}', {len(sheets_this)} dates stored)")
 
-def _save_daily_top(all_close, names, top_n=30, keep_days=30):
+def _save_daily_top(all_close, names, top_n=30, keep_days=30, live_prices=None):
+    live_prices = live_prices or {}
     today = datetime.date.today()
     while today.weekday() >= 5:
         today -= datetime.timedelta(days=1)
@@ -261,8 +299,12 @@ def _save_daily_top(all_close, names, top_n=30, keep_days=30):
     for sym_ns, c in all_close.items():
         if len(c) < 2:
             continue
-        price = c[-1]
-        prev  = c[-2]
+        if sym_ns in live_prices:
+            price = live_prices[sym_ns]
+            prev  = c[-1]   # today live vs yesterday close
+        else:
+            price = c[-1]
+            prev  = c[-2]   # yesterday close vs day before
         if prev <= 0 or price < 10:
             continue
         chg_pct = round((price - prev) / prev * 100, 2)
@@ -304,8 +346,9 @@ def _save_daily_top(all_close, names, top_n=30, keep_days=30):
     _log(f"Daily Top saved → {DAILY_TOP_PATH}  ({len(sheets_to_save)} dates stored)")
 
 
-def _scan_bottom(all_close, all_high, all_low, all_vol, names, mcap_data):
+def _scan_bottom(all_close, all_high, all_low, all_vol, names, mcap_data, live_prices=None):
     """Run Bottom Formation scan and save top 20 to history with 'B-' prefix."""
+    live_prices = live_prices or {}
     rows = []
     candidates = [
         k for k, v in mcap_data.items()
@@ -321,7 +364,7 @@ def _scan_bottom(all_close, all_high, all_low, all_vol, names, mcap_data):
             v = all_vol.get(sym_ns, [])
             if len(c) < 100 or len(h) < 15 or len(l) < 15:
                 continue
-            price  = c[-1]
+            price  = live_prices.get(sym_ns, c[-1])
             high52 = max(h[-252:]) if len(h) >= 252 else max(h)
             low52  = min(l[-252:]) if len(l) >= 252 else min(l)
             pct_off_high = (price - high52) / high52 * 100
@@ -382,8 +425,9 @@ def _scan_bottom(all_close, all_high, all_low, all_vol, names, mcap_data):
     return rows
 
 
-def _scan_consol(all_close, all_high, all_low, all_vol, names, mcap_data):
+def _scan_consol(all_close, all_high, all_low, all_vol, names, mcap_data, live_prices=None):
     """Run Consolidation scan and save top 20 to history with 'C-' prefix."""
+    live_prices = live_prices or {}
     rows = []
     candidates = [
         k for k, v in mcap_data.items()
@@ -399,7 +443,7 @@ def _scan_consol(all_close, all_high, all_low, all_vol, names, mcap_data):
             v = all_vol.get(sym_ns, [])
             if len(c) < 60 or len(h) < 20 or len(l) < 20:
                 continue
-            price = c[-1]
+            price = live_prices.get(sym_ns, c[-1])
             e50   = _ema_val(c, 50)
             e20   = _ema_val(c, 20)
             e200  = _ema_val(c, 200) if len(c) >= 200 else None
@@ -631,6 +675,15 @@ def run():
         except Exception as e:
             _log(f"  Batch {bi+1} error: {e}")
 
+    # ── Step 2.5: Live prices if market is open ───────────────────────────────
+    live_prices = {}
+    if _nse_market_open():
+        _log("Market open — fetching live 5-min prices…")
+        live_prices = _fetch_live_prices(tickers)
+        _log(f"Live prices fetched for {len(live_prices)} stocks")
+    else:
+        _log("Market closed — using last session close for current price")
+
     # ── Step 3: 200 EMA filter ────────────────────────────────────────────────
     ema200_pass = [
         sym_ns for sym_ns, c in all_close.items()
@@ -664,7 +717,7 @@ def run():
             if len(c) < 60 or len(h) < 11 or len(l) < 11 or len(v) < 20:
                 continue
 
-            price = c[-1]
+            price = live_prices.get(sym_ns, c[-1])
             e200  = _ema_val(c, 200)
             e20   = _ema_val(c, 20)
             e50   = _ema_val(c, 50)
@@ -755,11 +808,11 @@ def run():
         _log(f"  {i:2d}. {r['Stock']:12s}  Score {r['Score /10']}/10  Vol {r['Vol Ratio']:.1f}x  Price ₹{r['Price (₹)']}")
 
     # ── Step 6: Top 30 daily movers ───────────────────────────────────────────
-    _save_daily_top(all_close, names)
+    _save_daily_top(all_close, names, live_prices=live_prices)
 
     # ── Step 7 & 8: Bottom Formation + Consolidation scans ────────────────────
-    bottom_rows = _scan_bottom(all_close, all_high, all_low, all_vol, names, mcap_data)
-    consol_rows = _scan_consol(all_close, all_high, all_low, all_vol, names, mcap_data)
+    bottom_rows = _scan_bottom(all_close, all_high, all_low, all_vol, names, mcap_data, live_prices=live_prices)
+    consol_rows = _scan_consol(all_close, all_high, all_low, all_vol, names, mcap_data, live_prices=live_prices)
 
     # ── Step 9: Save all 3 results to one combined sheet in history.xlsx ──────
     _save_combined_history(rows, bottom_rows, consol_rows)

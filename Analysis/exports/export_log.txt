@@ -415,3 +415,34 @@ KeyError: 'Score /10'
 [15:56:52] Consolidation Breakout: 0 candidates
 [15:56:53] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-11-04)
 [15:56:53] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[18:03:03] NSE F&O Daily Export starting…
+[18:03:03] F&O list: 217 stocks (Cache (fresh))
+[18:03:03] Downloading 1Y price history for all stocks…
+
+6 Failed downloads:
+['KALYANKJIL.NS']: Timeout('Failed to perform, curl: (28) Operation timed out after 10002 milliseconds with 3895 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+['SYRMA.NS']: Timeout('Failed to perform, curl: (28) Operation timed out after 10002 milliseconds with 5195 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+['ENRIN.NS']: Timeout('Failed to perform, curl: (28) Operation timed out after 10002 milliseconds with 4826 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+['NATIONALUM.NS']: Timeout('Failed to perform, curl: (28) Operation timed out after 10002 milliseconds with 0 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+['MAXHEALTH.NS', 'PIDILITIND.NS']: Timeout('Failed to perform, curl: (28) Connection timed out after 10002 milliseconds. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+[18:03:22] Download complete. Running screeners…
+[18:03:22] Probable Upside:        15 candidates
+[18:03:22] Support Entry:          10 candidates
+[18:03:22] Consolidation Breakout: 0 candidates
+[18:03:23] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-11-05)
+[18:03:23] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:08] NSE F&O Daily Export starting…
+[15:00:08] F&O list: 217 stocks (Cache (fresh))
+[15:00:08] Downloading 1Y price history for all stocks…
+[15:00:20] Download complete. Running screeners…
+[15:00:20] Market open — fetching live 5-min prices…
+[15:00:29] Live prices fetched for 217 stocks
+[15:00:30] Probable Upside:        15 candidates
+[15:00:30] Support Entry:          10 candidates
+[15:00:30] Consolidation Breakout: 0 candidates
+[15:00:33] Saved → /Users/I325211/Local_Project/Analysis/exports/screener_master.xlsx  (tab: 2026-11-06)
+[15:00:33] History updated → /Users/I325211/Local_Project/Analysis/exports/consolidated_history.xlsx
