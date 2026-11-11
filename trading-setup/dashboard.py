@@ -1841,11 +1841,13 @@ elif page == "🔍  Stock Scanner":
                     lows  = list(sdf["low"].dropna().astype(float))
                     n60h  = highs[-min(60, len(highs)):]
                     n60l  = lows[-min(60, len(lows)):]
-                    if "BUY" in sig:
+                    if "BUY" in sig or "Bullish" in sig:
                         tgt    = round(max(max(n60h), price_ * 1.08), 2)
-                    else:
+                    elif "SELL" in sig or "Bearish" in sig:
                         tgt    = round(min(min(n60l), price_ * 0.92), 2)
-                    upside = round((tgt - price_) / price_ * 100, 1)
+                    else:
+                        tgt = None
+                    upside = round((tgt - price_) / price_ * 100, 1) if tgt else None
                 except Exception:
                     tgt, upside = None, None
 

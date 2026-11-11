@@ -710,14 +710,52 @@ def _dl_hist_1mo(tickers_tuple):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_history():
-    import os
-    path = os.path.join(os.path.dirname(__file__), "exports", "consolidated_history.xlsx")
-    xl = pd.ExcelFile(path)
-    result = {}
-    for sheet in ["Probable Upside", "Support Entry", "Consolidation Breakout"]:
-        if sheet in xl.sheet_names:
-            result[sheet] = xl.parse(sheet)
-    return result
+    import os, json as _json
+    base = os.path.dirname(__file__)
+    xl_path    = os.path.join(base, "exports", "consolidated_history.xlsx")
+    green_path = os.path.join(base, "exports", "green_history.json")
+
+    result      = {}
+    green_masks = {}
+
+    # ── Load stock history (pandas, fast) ─────────────────────────────────────
+    if not os.path.exists(xl_path):
+        return result, green_masks
+    try:
+        xl = pd.ExcelFile(xl_path)
+        for sheet in ["Probable Upside", "Support Entry", "Consolidation Breakout"]:
+            if sheet in xl.sheet_names:
+                result[sheet] = xl.parse(sheet)
+    except Exception:
+        pass
+
+    # ── Load green flags from JSON (written by 3PM export script) ─────────────
+    green_sets_hist = {}   # {sheet: {date_str: [stock, ...]}}
+    try:
+        if os.path.exists(green_path):
+            with open(green_path, encoding="utf-8") as _f:
+                green_sets_hist = _json.load(_f)
+    except Exception:
+        pass
+
+    # ── Build boolean mask DataFrames aligned to each history sheet ────────────
+    for sheet, df in result.items():
+        if df is None or df.empty:
+            continue
+        date_cols   = [c for c in df.columns if str(c)[:4].isdigit()]
+        sheet_green = green_sets_hist.get(sheet, {})
+        mask_rows   = []
+        for ri in range(len(df)):
+            mask_row = []
+            for col in date_cols:
+                stock      = df.iloc[ri][col]
+                date_str   = str(col)[:10]
+                green_list = sheet_green.get(date_str, [])
+                mask_row.append(bool(stock and str(stock).strip() in green_list))
+            mask_rows.append(mask_row)
+        green_masks[sheet] = pd.DataFrame(mask_rows, columns=date_cols, dtype=bool)
+
+    return result, green_masks
 
 
 @st.fragment
@@ -2114,7 +2152,7 @@ def _industry_tab():
 @st.fragment
 def _history_tab():
     import os as _os2
-    hist = _load_history()
+    hist, green_masks = _load_history()
 
     master_path = _os2.path.join(_os2.path.dirname(__file__), "exports", "screener_master.xlsx")
     master_dates = []
@@ -2144,11 +2182,53 @@ def _history_tab():
             display = df[last7].copy().head(15)
             display.columns = [str(c)[:10] for c in display.columns]
             display.index = range(1, len(display) + 1)
-            display.index.name = "Rank"
             display = display.fillna("—")
 
+            # Build green mask aligned to display, capture by value to avoid closure bug
+            gm = green_masks.get(sheet_name)
+            _gm_sub = None
+            if gm is not None and not gm.empty:
+                _cols = [c for c in last7 if c in gm.columns]
+                _gm_sub = gm[_cols].copy().head(15)
+                _gm_sub.columns = [str(c)[:10] for c in _gm_sub.columns]
+                _gm_sub.index   = range(len(_gm_sub))
+
             st.caption(f"Top picks across the last {len(last7)} sessions · newest left. Select a date below for full details.")
-            st.dataframe(display, use_container_width=True, height=580)
+            # Render as HTML table — pandas Styler is unreliable for pure-string
+            # dataframes in Streamlit; HTML gives guaranteed green cell rendering.
+            _th_s = ("padding:5px 10px;font-size:12px;font-weight:600;text-align:left;"
+                     "border-bottom:2px solid #e5e7eb;background:#f9fafb;color:#374151;"
+                     "white-space:nowrap;position:sticky;top:0;z-index:1;")
+            _td_b = "padding:4px 10px;font-size:12px;border-bottom:1px solid #f3f4f6;"
+            _hdr = f'<th style="{_th_s}width:26px;">#</th>'
+            for _dc in display.columns:
+                _hdr += f'<th style="{_th_s}">{_dc}</th>'
+            _body = ""
+            for _ii, _idx in enumerate(display.index):
+                _ri = _idx - 1
+                _row_bg = "#ffffff" if _ii % 2 == 0 else "#f9fafb"
+                _row_cells = (f'<td style="{_td_b}color:#9ca3af;text-align:right;'
+                              f'background:{_row_bg};">{_idx}</td>')
+                for _dc in display.columns:
+                    _v = display.at[_idx, _dc]
+                    _is_green = (
+                        _gm_sub is not None and _dc in _gm_sub.columns
+                        and 0 <= _ri < len(_gm_sub) and bool(_gm_sub.at[_ri, _dc])
+                    )
+                    if _is_green:
+                        _cs = f"{_td_b}background:#dcfce7;color:#166534;font-weight:700;"
+                    else:
+                        _cs = f"{_td_b}background:{_row_bg};color:#374151;"
+                    _row_cells += f'<td style="{_cs}">{_v}</td>'
+                _body += f'<tr>{_row_cells}</tr>'
+            st.markdown(
+                f'<div style="overflow-x:auto;overflow-y:auto;max-height:520px;'
+                f'border-radius:8px;border:1px solid #e5e7eb;">'
+                f'<table style="width:100%;border-collapse:collapse;">'
+                f'<thead><tr>{_hdr}</tr></thead><tbody>{_body}</tbody>'
+                f'</table></div>',
+                unsafe_allow_html=True
+            )
 
             # ── Detail table ──────────────────────────────────────────────────
             if master_dates:
@@ -2191,7 +2271,26 @@ def _history_tab():
                                 _det_col_cfg["Stock"] = st.column_config.LinkColumn(
                                     "Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True
                                 )
-                            st.dataframe(_det_show, column_config=_det_col_cfg, use_container_width=True, height=560)
+
+                            # Apply green row highlight matching main-tab logic
+                            _SWING_BOOL = ["Net Accum", "At Support", "Rising Lows", "Entry Trigger", "Full Trend"]
+                            def _hl_detail_row(row):
+                                styles = [""] * len(row)
+                                try:
+                                    if sheet_name == "Probable Upside":
+                                        is_green = all(str(row.get(c, "")) == "Yes" for c in _SWING_BOOL if c in row.index)
+                                    else:
+                                        is_green = str(row.get("Entry Trigger", "")) == "Yes"
+                                    if is_green:
+                                        styles = ["background-color:#dcfce7;color:#166534;font-weight:700"] * len(row)
+                                except Exception:
+                                    pass
+                                return styles
+
+                            st.dataframe(
+                                _det_show.style.apply(_hl_detail_row, axis=1),
+                                column_config=_det_col_cfg, use_container_width=True, height=560
+                            )
                         else:
                             st.info(f"No {sheet_name} data for {sel_date}.")
                 except Exception:

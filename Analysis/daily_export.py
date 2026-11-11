@@ -678,6 +678,9 @@ def run_consolidation(fno, close_df, high_df, low_df, vol_df, live_prices=None):
             ])
 
             if score >= 7:
+                vol_exp4  = bool(len(v) >= 2 and v[-1] > v[-2] and c[-1] > c[-2])
+                break_up4 = bool(c[-1] > brk and avgv20 and v[-1] > avgv20 * 0.8)
+                entry4    = vol_exp4 or break_up4
                 rows.append({
                     "Stock": nse, "Company": COMPANY_NAMES.get(nse, nse),
                     "Sector": SECTOR.get(nse, "Other"),
@@ -687,13 +690,14 @@ def run_consolidation(fno, close_df, high_df, low_df, vol_df, live_prices=None):
                     "Days Consol.": days_consol,
                     "10D Range %": round(range10, 2), "BB Width %": round(bb_w, 2),
                     "Vol Ratio": vol_ratio, "RSI": round(rsi4, 1),
-                    "SMA Flat":     "Yes" if sma_flat     else "No",
-                    "Prior Move":   "Yes" if strong_move  else "No",
-                    "Vol Pattern":  "Yes" if vol_pattern  else "No",
-                    "Near Breakout":"Yes" if near_brk     else "No",
-                    "BB Squeeze":   "Yes" if bb_sq        else "No",
-                    "Above SMA200": "Yes" if above_sma200 else "No",
-                    "Prior Trend":  "Yes" if prior_up     else "No",
+                    "SMA Flat":      "Yes" if sma_flat     else "No",
+                    "Prior Move":    "Yes" if strong_move  else "No",
+                    "Vol Pattern":   "Yes" if vol_pattern  else "No",
+                    "Near Breakout": "Yes" if near_brk     else "No",
+                    "BB Squeeze":    "Yes" if bb_sq        else "No",
+                    "Above SMA200":  "Yes" if above_sma200 else "No",
+                    "Prior Trend":   "Yes" if prior_up     else "No",
+                    "Entry Trigger": "Yes" if entry4       else "No",
                     "Score /10": score,
                     "Chart": f"https://www.tradingview.com/chart/?symbol=NSE:{nse}",
                 })
@@ -708,10 +712,12 @@ def run_consolidation(fno, close_df, high_df, low_df, vol_df, live_prices=None):
     return df
 
 # ── Master Excel: one file, one tab per date, three groups side-by-side ────────
-def write_master_excel(sheets_data: dict, date_str: str):
+def write_master_excel(sheets_data: dict, date_str: str, green_sets: dict = None):
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
+
+    green_sets = green_sets or {}
 
     # Load existing master file or start fresh
     if os.path.exists(MASTER_FILE):
@@ -739,16 +745,26 @@ def write_master_excel(sheets_data: dict, date_str: str):
         "Support Entry":          PatternFill("solid", fgColor="059669"),
         "Consolidation Breakout": PatternFill("solid", fgColor="7C3AED"),
     }
-    HEADER_FILL = PatternFill("solid", fgColor="334155")
-    HEADER_FONT = Font(color="FFFFFF", bold=True, size=10)
-    ALT_FILL    = PatternFill("solid", fgColor="F0F4FF")
-    GREEN_FILL  = PatternFill("solid", fgColor="D1FAE5")
-    YELLOW_FILL = PatternFill("solid", fgColor="FEF9C3")
-    THIN        = Side(style="thin", color="CBD5E1")
-    CELL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-    CENTER      = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    SCORE_COLS  = {"Score /10", "Score /11", "Score /9", "Score /8", "Score /6"}
-    GAP         = 2   # blank rows between groups
+    HEADER_FILL     = PatternFill("solid", fgColor="334155")
+    HEADER_FONT     = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL        = PatternFill("solid", fgColor="F0F4FF")
+    GREEN_FILL      = PatternFill("solid", fgColor="D1FAE5")
+    YELLOW_FILL     = PatternFill("solid", fgColor="FEF9C3")
+    ROW_GREEN_FILL  = PatternFill("solid", fgColor="DCFCE7")   # whole row when stock is green
+    ROW_GREEN_FONT  = Font(color="166534", bold=True, size=10)
+    THIN            = Side(style="thin", color="CBD5E1")
+    CELL_BORDER     = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER          = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    SCORE_COLS      = {"Score /10", "Score /11", "Score /9", "Score /8", "Score /6"}
+    GAP             = 2   # blank rows between groups
+
+    # Per-group green condition (matches app.py highlighting logic)
+    _SWING_BOOL = ["Net Accum", "At Support", "Rising Lows", "Entry Trigger", "Full Trend"]
+    _GREEN_CHECK = {
+        "Probable Upside":        lambda r: all(str(r.get(c, "")) == "Yes" for c in _SWING_BOOL),
+        "Support Entry":          lambda r: str(r.get("Entry Trigger", "")) == "Yes",
+        "Consolidation Breakout": lambda r: str(r.get("Entry Trigger", "")) == "Yes",
+    }
 
     row_start = 1
     for group_name, df in sheets_data.items():
@@ -785,19 +801,29 @@ def write_master_excel(sheets_data: dict, date_str: str):
         ws.row_dimensions[hdr_row].height = 28
 
         # Data rows
-        score_local = next((i for i, c in enumerate(cols) if c in SCORE_COLS), None)
-        max_score   = df[cols[score_local]].max() if score_local is not None else 0
+        score_local  = next((i for i, c in enumerate(cols) if c in SCORE_COLS), None)
+        max_score    = df[cols[score_local]].max() if score_local is not None else 0
+        green_check  = _GREEN_CHECK.get(group_name, lambda r: False)
 
         for di, (_, row) in enumerate(df.iterrows()):
-            ri       = hdr_row + 1 + di
-            row_fill = ALT_FILL if di % 2 == 1 else None
+            ri          = hdr_row + 1 + di
+            row_dict    = row.to_dict()
+            is_green_row = green_check(row_dict)
+            row_fill    = ALT_FILL if di % 2 == 1 else None
+
             for ci, col in enumerate(cols):
                 val            = row[col]
                 cell           = ws.cell(row=ri, column=ci + 1, value=val)
                 cell.border    = CELL_BORDER
                 cell.alignment = CENTER
-                if row_fill:
+
+                if is_green_row:
+                    cell.fill = ROW_GREEN_FILL
+                    cell.font = ROW_GREEN_FONT
+                elif row_fill:
                     cell.fill = row_fill
+
+                # Score column gets its own highlight (overrides row fill)
                 if score_local is not None and ci == score_local and isinstance(val, (int, float)):
                     cell.fill = GREEN_FILL if val >= max_score - 1 else YELLOW_FILL
                     cell.font = Font(bold=True, size=10)
@@ -842,16 +868,18 @@ def _find_streak_dates(date_data: dict, all_dates: list, min_streak: int = 3) ->
     return streak_dates
 
 
-def update_consolidated_history(results: dict):
+def update_consolidated_history(results: dict, green_sets: dict = None):
     """
     Layout per sheet:
       Row 1 : date1  | date2  | date3  | …  (oldest → newest, left → right)
       Row 2+: rank-1 stock | rank-2 stock | …  for that date
-    Keeps 1 year of date columns.
+    Keeps 1 year of date columns. Green-flagged stocks get a green cell fill.
     """
     from openpyxl import Workbook, load_workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
+
+    green_sets = green_sets or {}
 
     # use last market-open day so weekend runs don't create non-trading dates
     _d = datetime.date.today()
@@ -866,18 +894,24 @@ def update_consolidated_history(results: dict):
         "Consolidation Breakout": "Score /10",
     }
 
-    # history[sheet][date_str] = [stock1, stock2, …]  (ranked, top first)
-    history = {name: {} for name in results}
+    # history[sheet][date_str] = [stock1, stock2, …]
+    # history_green[sheet][date_str] = {stock: bool}  — True = was green
+    history       = {name: {} for name in results}
+    history_green = {name: {} for name in results}
 
     # ── Load existing (new format: row1=dates, rows2+=stocks) ─────────────────
+    _GREEN_RGB = "FFDCFCE7"   # openpyxl ARGB for our DCFCE7 fill
     if os.path.exists(HIST_FILE):
         try:
-            wb_old = load_workbook(HIST_FILE)
+            wb_old = load_workbook(HIST_FILE)   # NOT read_only — need fill colors
             for sheet_name in results:
                 if sheet_name not in wb_old.sheetnames:
                     continue
                 ws = wb_old[sheet_name]
-                headers = [cell.value for cell in ws[1]]
+                all_rows = list(ws.iter_rows(values_only=False))
+                if not all_rows:
+                    continue
+                headers = [cell.value for cell in all_rows[0]]
                 # Only load if first header looks like a date (new format)
                 try:
                     datetime.date.fromisoformat(str(headers[0])[:10])
@@ -890,12 +924,19 @@ def update_consolidated_history(results: dict):
                         d = datetime.date.fromisoformat(str(h)[:10])
                         if d < cutoff:
                             continue
-                        stocks = [
-                            str(row[ci]).strip()
-                            for row in ws.iter_rows(min_row=2, values_only=True)
-                            if ci < len(row) and row[ci]
-                        ]
-                        history[sheet_name][str(d)] = stocks
+                        stocks      = []
+                        green_flags = {}
+                        for data_row in all_rows[1:]:
+                            if ci < len(data_row) and data_row[ci].value:
+                                val = str(data_row[ci].value).strip()
+                                stocks.append(val)
+                                try:
+                                    rgb = str(data_row[ci].fill.fgColor.rgb).upper()
+                                    green_flags[val] = (rgb == _GREEN_RGB)
+                                except Exception:
+                                    green_flags[val] = False
+                        history[sheet_name][str(d)]       = stocks
+                        history_green[sheet_name][str(d)] = green_flags
                     except Exception:
                         pass
         except Exception:
@@ -907,19 +948,24 @@ def update_consolidated_history(results: dict):
             continue
         scol = SCORE_COL.get(sheet_name, "Score /8")
         sorted_df = df.sort_values(scol, ascending=False)
-        history[sheet_name][today_str] = [
+        stocks_today = [
             str(r.get("Stock", "")).strip()
             for _, r in sorted_df.iterrows()
             if str(r.get("Stock", "")).strip()
         ]
+        history[sheet_name][today_str] = stocks_today
+        green_today = green_sets.get(sheet_name, set())
+        history_green[sheet_name][today_str] = {s: s in green_today for s in stocks_today}
 
     # ── Build workbook ─────────────────────────────────────────────────────────
-    HDR_FILL   = PatternFill("solid", fgColor="1F497D")
-    HDR_FONT   = Font(bold=True, color="FFFFFF", size=10)
-    ALT_FILL   = PatternFill("solid", fgColor="EEF3FB")
-    STREAK_FILL = PatternFill("solid", fgColor="FFD580")  # warm orange — 3+ consecutive days
-    CENTER     = Alignment(horizontal="center", vertical="center")
-    THIN      = Border(
+    HDR_FILL    = PatternFill("solid", fgColor="1F497D")
+    HDR_FONT    = Font(bold=True, color="FFFFFF", size=10)
+    ALT_FILL    = PatternFill("solid", fgColor="EEF3FB")
+    STREAK_FILL = PatternFill("solid", fgColor="FFD580")
+    GREEN_FILL  = PatternFill("solid", fgColor="DCFCE7")
+    GREEN_FONT  = Font(bold=True, size=10, color="166534")
+    CENTER      = Alignment(horizontal="center", vertical="center")
+    THIN        = Border(
         left   = Side(style="thin", color="D0D0D0"),
         right  = Side(style="thin", color="D0D0D0"),
         top    = Side(style="thin", color="D0D0D0"),
@@ -960,13 +1006,18 @@ def update_consolidated_history(results: dict):
         # Rows 2+: stock names ranked top→bottom per date column
         for ri in range(max_stocks):
             for ci, date_str in enumerate(all_dates, 1):
-                stocks = date_data.get(date_str, [])
-                val    = stocks[ri] if ri < len(stocks) else ""
+                stocks      = date_data.get(date_str, [])
+                green_flags = history_green.get(sheet_name, {}).get(date_str, {})
+                val         = stocks[ri] if ri < len(stocks) else ""
                 c = ws.cell(row=ri + 2, column=ci, value=val)
                 c.alignment = CENTER
                 c.border    = THIN
+                is_green  = bool(val and green_flags.get(val, False))
                 is_streak = bool(val and date_str in streak_dates.get(val, set()))
-                if is_streak:
+                if is_green:
+                    c.fill = GREEN_FILL
+                    c.font = GREEN_FONT
+                elif is_streak:
                     c.fill = STREAK_FILL
                     c.font = Font(bold=True, size=10, color="7D3C00")
                 else:
@@ -1020,19 +1071,53 @@ if __name__ == "__main__":
     df3 = run_consolidation(FNO, close_df, high_df, low_df, vol_df, live_prices)
     log(f"Consolidation Breakout: {len(df3)} candidates")
 
+    # Compute green sets — matches the app.py green-highlight logic
+    _SWING_BOOL = ["Net Accum", "At Support", "Rising Lows", "Entry Trigger", "Full Trend"]
+    green_sets = {
+        "Probable Upside": set(
+            df1.loc[df1.apply(lambda r: all(str(r.get(c, "")) == "Yes" for c in _SWING_BOOL), axis=1), "Stock"]
+        ) if not df1.empty else set(),
+        "Support Entry": set(
+            df2.loc[df2["Entry Trigger"] == "Yes", "Stock"]
+        ) if not df2.empty and "Entry Trigger" in df2.columns else set(),
+        "Consolidation Breakout": set(
+            df3.loc[df3["Entry Trigger"] == "Yes", "Stock"]
+        ) if not df3.empty and "Entry Trigger" in df3.columns else set(),
+    }
+    log(f"Green stocks — Upside: {len(green_sets['Probable Upside'])}, "
+        f"Support: {len(green_sets['Support Entry'])}, "
+        f"Consol: {len(green_sets['Consolidation Breakout'])}")
+
     write_master_excel({
         "Probable Upside":        df1,
         "Support Entry":          df2,
         "Consolidation Breakout": df3,
-    }, TODAY)
+    }, TODAY, green_sets)
     log(f"Saved → {MASTER_FILE}  (tab: {TODAY})")
 
     update_consolidated_history({
         "Probable Upside":        df1,
         "Support Entry":          df2,
         "Consolidation Breakout": df3,
-    })
+    }, green_sets)
     log(f"History updated → {HIST_FILE}")
+
+    # Save green history to JSON — read by the app for reliable history-tab highlighting
+    GREEN_HIST_FILE = os.path.join(EXPORTS_DIR, "green_history.json")
+    try:
+        _gh = {}
+        if os.path.exists(GREEN_HIST_FILE):
+            with open(GREEN_HIST_FILE, encoding="utf-8") as _f:
+                _gh = json.load(_f)
+        cutoff_str = str(datetime.date.today() - datetime.timedelta(days=365))
+        for _sheet, _stocks in green_sets.items():
+            _gh.setdefault(_sheet, {})[TODAY] = sorted(_stocks)
+            _gh[_sheet] = {d: v for d, v in _gh[_sheet].items() if d >= cutoff_str}
+        with open(GREEN_HIST_FILE, "w", encoding="utf-8") as _f:
+            json.dump(_gh, _f, indent=2)
+        log(f"Green history saved → {GREEN_HIST_FILE}")
+    except Exception as _e:
+        log(f"Warning: could not save green history: {_e}")
 
     # Cross-platform notification
     try:
