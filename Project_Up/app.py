@@ -397,6 +397,7 @@ def _write_formatted_excel(path, sheets):
     NEG_FILL  = PatternFill("solid", fgColor="FEE2E2")
     SCR_HI    = PatternFill("solid", fgColor="D1FAE5")
     SCR_MED   = PatternFill("solid", fgColor="FEF9C3")
+    ROW_GREEN = PatternFill("solid", fgColor="DCFCE7")
     THIN      = Side(style="thin", color="E2E8F0")
     BORDER    = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
     CENTER    = Alignment(horizontal="center", vertical="center")
@@ -413,26 +414,33 @@ def _write_formatted_excel(path, sheets):
             c.alignment = CENTER; c.border = BORDER
         ws.row_dimensions[1].height = 24
         ws.freeze_panes = "A2"
+        _TICK_COLS_XL = ["Prior Uptrend", "3D Squeeze", "Net Accum", "Rising Lows", "Entry Trigger"]
+        score_col_name = next((c for c in cols if c in ("Score /10", "Score /9", "Score")), None)
         for ri, (_, row) in enumerate(df.iterrows(), 2):
+            is_all_green = bool([c for c in _TICK_COLS_XL if c in cols]) and all(str(row.get(c, "")) == "✅" for c in _TICK_COLS_XL if c in cols)
             for ci, col in enumerate(cols, 1):
                 val = row[col]
                 c = ws.cell(row=ri, column=ci, value=val)
                 c.border = BORDER; c.alignment = CENTER
-                if ri % 2 == 0:
-                    c.fill = ALT_FILL
-                if "%" in str(col) and col not in ("Score /10",):
-                    try:
-                        fv = float(val)
-                        c.fill = POS_FILL if fv > 0 else NEG_FILL
-                    except (TypeError, ValueError):
-                        pass
-                if col in ("Score /10", "Score /9", "Score"):
-                    try:
-                        sv = float(val)
-                        c.fill = SCR_HI if sv >= 7 else SCR_MED
-                        c.font = Font(bold=True, size=10)
-                    except (TypeError, ValueError):
-                        pass
+                if is_all_green:
+                    c.fill = ROW_GREEN
+                    c.font = Font(color="166534", bold=True, size=10)
+                else:
+                    if ri % 2 == 0:
+                        c.fill = ALT_FILL
+                    if "%" in str(col) and col not in ("Score /10",):
+                        try:
+                            fv = float(val)
+                            c.fill = POS_FILL if fv > 0 else NEG_FILL
+                        except (TypeError, ValueError):
+                            pass
+                    if col in ("Score /10", "Score /9", "Score"):
+                        try:
+                            sv = float(val)
+                            c.fill = SCR_HI if sv >= 7 else SCR_MED
+                            c.font = Font(bold=True, size=10)
+                        except (TypeError, ValueError):
+                            pass
         for ci, col in enumerate(cols, 1):
             ml = max((len(str(ws.cell(r, ci).value or "")) for r in range(1, ws.max_row + 1)), default=8)
             ws.column_dimensions[get_column_letter(ci)].width = min(ml + 3, 28)
@@ -647,8 +655,19 @@ with tab1:
                 f"**{strong} high-conviction** (Score ≥ 8/10)"
             )
 
+            _TICK_COLS = ["Prior Uptrend", "3D Squeeze", "Net Accum", "Rising Lows", "Entry Trigger"]
+
+            def _hl_up_all_green(row):
+                _present = [c for c in _TICK_COLS if c in row.index]
+                if _present and all(str(row.get(c, "")) == "✅" for c in _present):
+                    return [
+                        "background-color:#dcfce7;color:#166534;font-weight:700" if col == "Stock" else ""
+                        for col in row.index
+                    ]
+                return [""] * len(row)
+
             st.dataframe(
-                df,
+                df.style.apply(_hl_up_all_green, axis=1),
                 use_container_width=True,
                 height=min(700, 56 + len(df) * 35),
                 column_config={
@@ -1200,7 +1219,7 @@ with tab4:
                                 pct_off_high >= -35,
                             ])
 
-                            if score < 3:
+                            if score < 5:
                                 continue
 
                             mcap_cr = round(mcap_data[sym_ns]["mcap"] / 1e7)
@@ -1253,13 +1272,14 @@ with tab4:
         st.markdown("")
 
         if bottom_rows:
-            df_bot = pd.DataFrame(bottom_rows).reset_index(drop=True)
+            df_bot = pd.DataFrame(bottom_rows).head(20).reset_index(drop=True)
             df_bot.index += 1
+            st.caption(f"Showing top {len(df_bot)} · sorted by score · {len(bottom_rows)} total (Score ≥ 5)")
 
             st.dataframe(
                 df_bot,
                 use_container_width=True,
-                height=min(800, 56 + len(df_bot) * 35),
+                height=min(760, 56 + len(df_bot) * 35),
                 column_config={
                     "Stock":           st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                     "Company":         st.column_config.TextColumn("Company"),
@@ -1447,7 +1467,7 @@ with tab5:
                                 len(v) >= 5 and v[-1] < sum(v[-6:-1]) / 5,
                             ])
 
-                            if score < 4:
+                            if score < 5:
                                 continue
 
                             pct_from_e200 = round((price - e200) / e200 * 100, 1) if e200 else None
@@ -1501,13 +1521,14 @@ with tab5:
         st.markdown("")
 
         if consol_rows:
-            df_con = pd.DataFrame(consol_rows).reset_index(drop=True)
+            df_con = pd.DataFrame(consol_rows).head(20).reset_index(drop=True)
             df_con.index += 1
+            st.caption(f"Showing top {len(df_con)} · sorted by score · {len(consol_rows)} total (Score ≥ 5)")
 
             st.dataframe(
                 df_con,
                 use_container_width=True,
-                height=min(800, 56 + len(df_con) * 35),
+                height=min(760, 56 + len(df_con) * 35),
                 column_config={
                     "Stock":          st.column_config.LinkColumn("Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True),
                     "Company":        st.column_config.TextColumn("Company"),
@@ -1638,23 +1659,75 @@ def _history_tab():
                 continue
 
             rows = []
+            green_cells = {}  # (rank, date_key) -> bool
+            _TICK_COLS_H = ["Prior Uptrend", "3D Squeeze", "Net Accum", "Rising Lows", "Entry Trigger"]
             for rank in range(1, max_rank + 1):
                 row = {"Rank": rank}
                 for date in last10:
                     df = all_sections[date].get(sec_name, pd.DataFrame())
+                    date_key = date[:10]
+                    is_green = False
                     if not df.empty and rank - 1 < len(df):
                         r = df.iloc[rank - 1]
                         ticker = str(r.get("Stock", "")).strip()
                         score_col = next((c for c in ["Score /10", "Score /9"] if c in df.columns), None)
                         score  = str(r.get(score_col, "")).strip() if score_col else ""
-                        row[date[:10]] = f"{ticker}  ·  {score}" if score else ticker
+                        row[date_key] = f"{ticker}  ·  {score}" if score else ticker
+                        _present = [c for c in _TICK_COLS_H if c in df.columns]
+                        is_green = bool(_present) and all(str(r.get(c, "")) in ("✅", "Yes") for c in _present)
                     else:
-                        row[date[:10]] = "—"
+                        row[date_key] = "—"
+                    green_cells[(rank, date_key)] = is_green
                 rows.append(row)
 
             pivot = pd.DataFrame(rows).set_index("Rank")
             st.caption(f"Top picks across the last {len(last10)} sessions · newest left. Click a date below to see full details.")
-            st.dataframe(pivot, use_container_width=True, height=560)
+
+            # Render as HTML so stock names are clickable TradingView links
+            _th_s = ("padding:5px 10px;font-size:12px;font-weight:600;text-align:left;"
+                     "border-bottom:2px solid #e5e7eb;background:#f9fafb;color:#374151;"
+                     "white-space:nowrap;position:sticky;top:0;z-index:1;")
+            _td_b2 = "padding:4px 10px;font-size:12px;border-bottom:1px solid #f3f4f6;white-space:nowrap;"
+            _ph = f'<th style="{_th_s}width:40px;">Rank</th>'
+            for _pc in pivot.columns:
+                _ph += f'<th style="{_th_s}">{_pc}</th>'
+            _pb = ""
+            for _pi, _prow in pivot.iterrows():
+                _row_bg2 = "#ffffff" if (_pi - 1) % 2 == 0 else "#f9fafb"
+                _pcells = f'<td style="{_td_b2}color:#9ca3af;text-align:right;background:{_row_bg2};">{_pi}</td>'
+                for _pcol in pivot.columns:
+                    _pv = str(_prow[_pcol]) if pd.notna(_prow[_pcol]) else "—"
+                    _is_perfect = green_cells.get((_pi, _pcol), False)
+                    if _pv and _pv != "—":
+                        _parts = _pv.split("·")
+                        _ticker = _parts[0].strip()
+                        _sc = f" · {_parts[1].strip()}" if len(_parts) > 1 else ""
+                        _tv = f"https://www.tradingview.com/chart/?symbol=NSE:{_ticker}"
+                        if _is_perfect:
+                            _cs2 = f"{_td_b2}background:#dcfce7;"
+                            _pinner = (f'<a href="{_tv}" target="_blank" '
+                                       f'style="color:#166534;text-decoration:none;font-weight:700;">'
+                                       f'{_ticker}</a>'
+                                       f'<span style="color:#166534;font-size:11px;">{_sc}</span>')
+                        else:
+                            _cs2 = f"{_td_b2}background:{_row_bg2};color:#374151;"
+                            _pinner = (f'<a href="{_tv}" target="_blank" '
+                                       f'style="color:#2563eb;text-decoration:none;font-weight:500;">'
+                                       f'{_ticker}</a>'
+                                       f'<span style="color:#9ca3af;font-size:11px;">{_sc}</span>')
+                    else:
+                        _cs2 = f"{_td_b2}background:{_row_bg2};"
+                        _pinner = '<span style="color:#d1d5db;">—</span>'
+                    _pcells += f'<td style="{_cs2}">{_pinner}</td>'
+                _pb += f'<tr>{_pcells}</tr>'
+            st.markdown(
+                f'<div style="overflow-x:auto;overflow-y:auto;max-height:520px;'
+                f'border-radius:8px;border:1px solid #e5e7eb;">'
+                f'<table style="width:100%;border-collapse:collapse;">'
+                f'<thead><tr>{_ph}</tr></thead><tbody>{_pb}</tbody>'
+                f'</table></div>',
+                unsafe_allow_html=True
+            )
 
             st.markdown("---")
             selected = st.selectbox("Full details for date", last10, index=0, key=f"hist_sel_{sec_name}")
@@ -1672,7 +1745,16 @@ def _history_tab():
                     _det_col_cfg["Stock"] = st.column_config.LinkColumn(
                         "Stock", display_text=r"symbol=NSE:([^&]+)", pinned=True
                     )
-                st.dataframe(df_out, column_config=_det_col_cfg, use_container_width=True, height=560)
+                _TICK_COLS_DET = ["Prior Uptrend", "3D Squeeze", "Net Accum", "Rising Lows", "Entry Trigger"]
+                def _hl_det_row(row, _tc=_TICK_COLS_DET):
+                    _pr = [c for c in _tc if c in row.index]
+                    if _pr and all(str(row.get(c, "")) in ("✅", "Yes") for c in _pr):
+                        return ["background-color:#dcfce7;color:#166534;font-weight:700"] * len(row)
+                    return [""] * len(row)
+                st.dataframe(
+                    df_out.style.apply(_hl_det_row, axis=1),
+                    column_config=_det_col_cfg, use_container_width=True, height=560
+                )
             else:
                 st.info("No data for this date.")
 

@@ -819,11 +819,72 @@ def _fno_tab():
     st.caption(f"Showing {len(fno_df)} of {len(_FNO)} NSE F&O stocks")
 
 
+def _load_export_section(section_key):
+    """Load a screener section from today's screener_master.xlsx sheet. Returns (rows, date) or ([], None)."""
+    import os as _ose, datetime as _dt
+    _master = _ose.path.join(_ose.path.dirname(_ose.path.abspath(__file__)), "exports", "screener_master.xlsx")
+    _today = str(_dt.date.today())
+    if not _ose.path.exists(_master):
+        return [], None
+    try:
+        import openpyxl as _oxl
+        _wb = _oxl.load_workbook(_master, read_only=True, data_only=True)
+        if _today not in _wb.sheetnames:
+            return [], None
+        _ws = _wb[_today]
+        _raw = list(_ws.iter_rows(values_only=True))
+        _yn = {"Yes": "✅", "No": "❌"}
+        _tick_cols = {"Net Accum", "At Support", "Rising Lows", "Entry Trigger", "Full Trend"}
+        # find the section
+        for _si, _row in enumerate(_raw):
+            if _row[0] and section_key in str(_row[0]).upper():
+                _hdrs = [str(v).strip() for v in _raw[_si + 1] if v is not None and str(v).strip() not in ("None", "")]
+                _rows = []
+                for _dr in _raw[_si + 2:]:
+                    if not _dr[0]:
+                        break
+                    _d = {_hdrs[_ci]: _dr[_ci] for _ci in range(len(_hdrs)) if _ci < len(_dr)}
+                    if not _d.get("Stock"):
+                        break
+                    # Convert Yes/No to emoji, Stock name to TradingView URL
+                    for _c in _tick_cols:
+                        if _c in _d:
+                            _d[_c] = _yn.get(str(_d[_c]), _d[_c])
+                    _stk = str(_d["Stock"]).strip()
+                    _d["Stock"] = f"https://www.tradingview.com/chart/?symbol=NSE:{_stk}"
+                    _rows.append(_d)
+                return _rows, _today
+    except Exception:
+        pass
+    return [], None
+
+
 @st.fragment
 def _upside_tab():
+    _market_open = _nse_market_open()
+
+    def _do_load_export():
+        _auto, _dt = _load_export_section("PROBABLE UPSIDE")
+        if _auto:
+            st.session_state["swing_data"] = _auto
+            st.session_state["swing_requested"] = True
+            st.session_state["swing_from_export"] = _dt
+
+    if not _market_open and "swing_data" not in st.session_state:
+        _do_load_export()
+
     if st.button("🔮 Screen for Upside Candidates", key="load_swing"):
         st.session_state.pop("swing_data", None)
+        st.session_state.pop("swing_from_export", None)
+        if not _market_open:
+            _do_load_export()
+        # whether export loaded or not, always set swing_requested so live screener
+        # runs as fallback if export returned nothing
         st.session_state["swing_requested"] = True
+
+    if st.session_state.get("swing_from_export"):
+        _edt = st.session_state["swing_from_export"]
+        st.caption(f"🕐 Market closed — showing export data from {_edt}")
 
     if st.session_state.get("swing_requested"):
         if "swing_data" not in st.session_state:
@@ -988,7 +1049,7 @@ def _upside_tab():
             _swing_df["_pri"] = _swing_df["Quality"].map(_SORT_PRIORITY)
             _swing_df = (_swing_df
                          .sort_values(["_pri", "Score /10", "Vol Ratio"], ascending=[True, False, False])
-                         .drop(columns=["_pri"])
+                         .drop(columns=["_pri"] + [c for c in ("Chart",) if c in _swing_df.columns])
                          .head(15)
                          .reset_index(drop=True))
             _swing_df.index += 1
@@ -1045,9 +1106,28 @@ def _upside_tab():
 
 @st.fragment
 def _support_tab():
+    _market_open = _nse_market_open()
+
+    def _do_load_export():
+        _auto, _dt = _load_export_section("SUPPORT ENTRY")
+        if _auto:
+            st.session_state["support_data"] = _auto
+            st.session_state["support_requested"] = True
+            st.session_state["support_from_export"] = _dt
+
+    if not _market_open and "support_data" not in st.session_state:
+        _do_load_export()
+
     if st.button("🎯 Find Support Entry Setups", key="load_support"):
         st.session_state.pop("support_data", None)
+        st.session_state.pop("support_from_export", None)
+        if not _market_open:
+            _do_load_export()
         st.session_state["support_requested"] = True
+
+    if st.session_state.get("support_from_export"):
+        _edt = st.session_state["support_from_export"]
+        st.caption(f"🕐 Market closed — showing export data from {_edt}")
 
     if st.session_state.get("support_requested"):
         if "support_data" not in st.session_state:
@@ -1274,6 +1354,7 @@ def _support_tab():
                 .head(15)
                 .reset_index(drop=True)
             )
+            _sup_df = _sup_df.drop(columns=[c for c in ("Chart",) if c in _sup_df.columns])
             _sup_df.index += 1
 
             _strong3 = (_sup_df["Score /11"] >= 9).sum()
@@ -1350,9 +1431,28 @@ def _support_tab():
 
 @st.fragment
 def _consol_tab():
+    _market_open = _nse_market_open()
+
+    def _do_load_export():
+        _auto, _dt = _load_export_section("CONSOLIDATION BREAKOUT")
+        if _auto:
+            st.session_state["consol_data"] = _auto
+            st.session_state["consol_requested"] = True
+            st.session_state["consol_from_export"] = _dt
+
+    if not _market_open and "consol_data" not in st.session_state:
+        _do_load_export()
+
     if st.button("🔲 Find Consolidation Setups", key="load_consol"):
         st.session_state.pop("consol_data", None)
+        st.session_state.pop("consol_from_export", None)
+        if not _market_open:
+            _do_load_export()
         st.session_state["consol_requested"] = True
+
+    if st.session_state.get("consol_from_export"):
+        _edt = st.session_state["consol_from_export"]
+        st.caption(f"🕐 Market closed — showing export data from {_edt}")
 
     if st.session_state.get("consol_requested"):
         if "consol_data" not in st.session_state:
@@ -1554,6 +1654,7 @@ def _consol_tab():
                 .head(15)
                 .reset_index(drop=True)
             )
+            _con_df = _con_df.drop(columns=[c for c in ("Chart",) if c in _con_df.columns])
             _con_df.index += 1
 
             _strong4 = (_con_df["Score /10"] >= 8).sum()
@@ -2199,7 +2300,7 @@ def _history_tab():
             _th_s = ("padding:5px 10px;font-size:12px;font-weight:600;text-align:left;"
                      "border-bottom:2px solid #e5e7eb;background:#f9fafb;color:#374151;"
                      "white-space:nowrap;position:sticky;top:0;z-index:1;")
-            _td_b = "padding:4px 10px;font-size:12px;border-bottom:1px solid #f3f4f6;"
+            _td_b = "padding:4px 10px;font-size:12px;border-bottom:1px solid #f3f4f6;white-space:nowrap;"
             _hdr = f'<th style="{_th_s}width:26px;">#</th>'
             for _dc in display.columns:
                 _hdr += f'<th style="{_th_s}">{_dc}</th>'
@@ -2219,7 +2320,13 @@ def _history_tab():
                         _cs = f"{_td_b}background:#dcfce7;color:#166534;font-weight:700;"
                     else:
                         _cs = f"{_td_b}background:{_row_bg};color:#374151;"
-                    _row_cells += f'<td style="{_cs}">{_v}</td>'
+                    if _v and _v != "—":
+                        _tv = f"https://www.tradingview.com/chart/?symbol=NSE:{_v}"
+                        _inner = (f'<a href="{_tv}" target="_blank" '
+                                  f'style="color:inherit;text-decoration:none;">{_v}</a>')
+                    else:
+                        _inner = _v
+                    _row_cells += f'<td style="{_cs}">{_inner}</td>'
                 _body += f'<tr>{_row_cells}</tr>'
             st.markdown(
                 f'<div style="overflow-x:auto;overflow-y:auto;max-height:520px;'

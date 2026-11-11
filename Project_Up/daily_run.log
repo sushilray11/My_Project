@@ -1661,3 +1661,72 @@ ModuleNotFoundError: No module named 'pandas'
 [15:04:25] Consolidation scan: 982 candidates
 [15:04:25] Consolidation: 4 setups found
 [15:04:26] Combined history saved → 2026-11-06  (Upside: 15, Bottom: 17, Consol: 4)
+/Users/I325211/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[15:00:06] Project Up — daily screener starting
+[15:00:06] Universe: 2645 stocks (cache)
+[15:00:06] Downloading 2645 tickers in 7 batches…
+[15:00:06]   Batch 1/7 (400 stocks)
+[15:00:23]   Batch 2/7 (400 stocks)
+[15:00:39]   Batch 3/7 (400 stocks)
+[15:00:54]   Batch 4/7 (400 stocks)
+[15:01:10]   Batch 5/7 (400 stocks)
+[15:01:26]   Batch 6/7 (400 stocks)
+[15:01:42]   Batch 7/7 (245 stocks)
+[15:01:52] Market open — fetching live 5-min prices…
+
+3 Failed downloads:
+['APOORVA.NS', 'ASSAMENT.NS', 'BGLOBAL.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=1d)')
+
+5 Failed downloads:
+['EDUCOMP.NS', 'CMICABLES.NS', 'CLCIND.NS', 'ELCIDIN.NS', 'CEREBRAINT.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=1d)')
+
+1 Failed download:
+['IMPEXFERRO.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=1d)')
+
+4 Failed downloads:
+['KALYANI.NS', 'MPDL.NS', 'LASA.NS', 'NAGAFERT.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=1d)')
+
+2 Failed downloads:
+['RAJVIR.NS', 'SAB.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=1d)')
+
+6 Failed downloads:
+['THAKDEV.NS', 'SHERVANI.NS', 'THACKER.NS', 'SAYAJIHOTL.NS', 'SELMC.NS', 'SKIL.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=1d)')
+
+5 Failed downloads:
+['YOGI.NS', 'WHBRADY.NS', 'UNIVAFOODS.NS', 'WILLAMAGOR.NS', 'UPHOT.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=1d)')
+[15:04:22] Live prices fetched for 2619 stocks
+[15:04:22] 200 EMA filter: 991 pass
+[15:04:22]   Mcap check 100/991: 62 qualifying
+[15:04:23]   Mcap check 200/991: 138 qualifying
+[15:04:23]   Mcap check 300/991: 206 qualifying
+[15:04:23]   Mcap check 400/991: 281 qualifying
+[15:04:23]   Mcap check 500/991: 348 qualifying
+[15:04:23]   Mcap check 600/991: 417 qualifying
+[15:04:23]   Mcap check 700/991: 486 qualifying
+[15:04:23]   Mcap check 800/991: 554 qualifying
+[15:04:23]   Mcap check 900/991: 624 qualifying
+[15:04:23] Mkt Cap filter: 685 pass
+[15:04:23] Scoring complete: 53 stocks qualify (score ≥ 5)
+[15:04:23] Top 15 picks:
+[15:04:23]    1. NUVOCO        Score 8/10  Vol 0.7x  Price ₹342.5
+[15:04:23]    2. IIFLCAPS      Score 7/10  Vol 0.9x  Price ₹351.05
+[15:04:23]    3. USHAMART      Score 7/10  Vol 0.7x  Price ₹492.0
+[15:04:23]    4. ADOR          Score 7/10  Vol 0.5x  Price ₹1481.3
+[15:04:23]    5. KRBL          Score 7/10  Vol 0.5x  Price ₹415.45
+[15:04:23]    6. TEXINFRA      Score 7/10  Vol 0.5x  Price ₹131.0
+[15:04:23]    7. BLKASHYAP     Score 7/10  Vol 0.3x  Price ₹56.42
+[15:04:23]    8. MOLDTKPAC     Score 7/10  Vol 0.3x  Price ₹352.75
+[15:04:23]    9. PRIMESECU     Score 7/10  Vol 0.2x  Price ₹298.55
+[15:04:23]   10. UDS           Score 7/10  Vol 0.2x  Price ₹207.02
+[15:04:23]   11. IIFL          Score 6/10  Vol 7.5x  Price ₹666.15
+[15:04:23]   12. RAJRILTD      Score 6/10  Vol 5.4x  Price ₹22.34
+[15:04:23]   13. KTKBANK       Score 6/10  Vol 3.1x  Price ₹349.0
+[15:04:23]   14. MEESHO        Score 6/10  Vol 1.8x  Price ₹247.69
+[15:04:23]   15. DCBBANK       Score 6/10  Vol 1.7x  Price ₹219.56
+[15:04:24] Daily Top saved → /Users/I325211/Local_Project/Project_Up/dailyTop.xlsx  (30 dates stored)
+[15:04:24] Bottom Formation scan: 995 candidates
+[15:04:24] Bottom Formation: 68 setups found
+[15:04:24] Consolidation scan: 995 candidates
+[15:04:24] Consolidation: 3 setups found
+[15:04:25] Combined history saved → 2026-11-11  (Upside: 15, Bottom: 20, Consol: 3)

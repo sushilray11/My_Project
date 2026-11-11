@@ -194,6 +194,7 @@ def _write_formatted_excel(path, sheets, streak_stocks=None):
     ALT_FILL    = PatternFill("solid", fgColor="EFF6FF")
     SCR_HI      = PatternFill("solid", fgColor="D1FAE5")
     SCR_MED     = PatternFill("solid", fgColor="FEF9C3")
+    ROW_GREEN   = PatternFill("solid", fgColor="DCFCE7")
     STREAK_FILL = PatternFill("solid", fgColor="FFD580")  # warm orange — 2+ consecutive days
     THIN        = Side(style="thin", color="E2E8F0")
     BORDER      = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -211,12 +212,17 @@ def _write_formatted_excel(path, sheets, streak_stocks=None):
             c.alignment = CENTER; c.border = BORDER
         ws.row_dimensions[1].height = 24
         ws.freeze_panes = "A2"
+        score_col_name = next((col for col in cols if col in ("Score /10", "Score /9", "Score")), None)
         for ri, (_, row) in enumerate(df.iterrows(), 2):
             stock_val = str(row.get("Stock", "")).strip() if "Stock" in row else ""
             is_streak = bool(
                 streak_stocks and stock_val
                 and sheet_name in streak_stocks.get(stock_val, set())
             )
+            _TICK_COLS_DL = ["Prior Uptrend", "3D Squeeze", "Net Accum", "Rising Lows", "Entry Trigger"]
+            is_all_green = (not is_streak and
+                            bool([c for c in _TICK_COLS_DL if c in cols]) and
+                            all(str(row.get(c, "")) == "✅" for c in _TICK_COLS_DL if c in cols))
             for ci, col in enumerate(cols, 1):
                 val = row[col]
                 c = ws.cell(row=ri, column=ci, value=val)
@@ -224,6 +230,9 @@ def _write_formatted_excel(path, sheets, streak_stocks=None):
                 if is_streak:
                     c.fill = STREAK_FILL
                     c.font = Font(bold=True, size=10, color="7D3C00")
+                elif is_all_green:
+                    c.fill = ROW_GREEN
+                    c.font = Font(color="166534", bold=True, size=10)
                 else:
                     if ri % 2 == 0:
                         c.fill = ALT_FILL
@@ -511,15 +520,16 @@ def _write_section(ws, title, rows, row_start, sec_color):
     if not rows:
         return row_start
 
-    HDR_FILL = PatternFill("solid", fgColor="1D4ED8")
-    HDR_FONT = Font(color="FFFFFF", bold=True, size=10)
-    ALT_FILL = PatternFill("solid", fgColor="EFF6FF")
-    SCR_HI   = PatternFill("solid", fgColor="D1FAE5")
-    SCR_MED  = PatternFill("solid", fgColor="FEF9C3")
-    THIN     = Side(style="thin", color="E2E8F0")
-    BORDER   = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-    CENTER   = Alignment(horizontal="center", vertical="center")
-    SEC_FILL = PatternFill("solid", fgColor=sec_color)
+    HDR_FILL  = PatternFill("solid", fgColor="1D4ED8")
+    HDR_FONT  = Font(color="FFFFFF", bold=True, size=10)
+    ALT_FILL  = PatternFill("solid", fgColor="EFF6FF")
+    SCR_HI    = PatternFill("solid", fgColor="D1FAE5")
+    SCR_MED   = PatternFill("solid", fgColor="FEF9C3")
+    ROW_GREEN = PatternFill("solid", fgColor="DCFCE7")
+    THIN      = Side(style="thin", color="E2E8F0")
+    BORDER    = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    CENTER    = Alignment(horizontal="center", vertical="center")
+    SEC_FILL  = PatternFill("solid", fgColor=sec_color)
 
     cols = [c for c in rows[0].keys() if c != "Chart"]
     n    = len(cols)
@@ -541,21 +551,29 @@ def _write_section(ws, title, rows, row_start, sec_color):
     ws.row_dimensions[row_start].height = 20
     row_start += 1
 
+    # Detect all-green rows (all 5 tick columns are ✅)
+    _TICK_COLS = ["Prior Uptrend", "3D Squeeze", "Net Accum", "Rising Lows", "Entry Trigger"]
+
     # Data rows
     for ri, row in enumerate(rows):
+        is_all_green = bool([c for c in _TICK_COLS if c in cols]) and all(str(row.get(c, "")) == "✅" for c in _TICK_COLS if c in cols)
         for ci, col in enumerate(cols, 1):
             val = row.get(col)
             c = ws.cell(row=row_start, column=ci, value=val)
             c.border = BORDER; c.alignment = CENTER
-            if ri % 2 == 0:
-                c.fill = ALT_FILL
-            if col in ("Score /10", "Score /9"):
-                try:
-                    sv = float(val)
-                    c.fill = SCR_HI if sv >= 7 else SCR_MED
-                    c.font = Font(bold=True, size=10)
-                except (TypeError, ValueError):
-                    pass
+            if is_all_green:
+                c.fill = ROW_GREEN
+                c.font = Font(color="166534", bold=True, size=10)
+            else:
+                if ri % 2 == 0:
+                    c.fill = ALT_FILL
+                if col in ("Score /10", "Score /9"):
+                    try:
+                        sv = float(val)
+                        c.fill = SCR_HI if sv >= 7 else SCR_MED
+                        c.font = Font(bold=True, size=10)
+                    except (TypeError, ValueError):
+                        pass
         ws.row_dimensions[row_start].height = 18
         row_start += 1
 
